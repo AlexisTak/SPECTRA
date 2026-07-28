@@ -234,7 +234,7 @@ pub async fn update_case(
     id: String,
     data: UpdateCaseInput,
 ) -> AppResult<Case> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     // Bloc explicite : `Vec<&dyn ToSql>` n'est pas `Sync`, il ne doit donc pas
     // rester vivant au moment du `.await` final, sinon le futur de la commande
@@ -348,7 +348,7 @@ pub async fn delete_case(
     state: tauri::State<'_, AppState>,
     id: String,
 ) -> AppResult<()> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     // Récupère le dernier hash d'audit pour ce dossier (chaînage).
     let previous_hash: Option<String> = conn

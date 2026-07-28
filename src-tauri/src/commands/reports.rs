@@ -620,7 +620,7 @@ pub async fn get_report_timeline(
     state: tauri::State<'_, AppState>,
     report_id: String,
 ) -> AppResult<Vec<ReportTimelineEvent>> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, reportId, dateEvent, description, type, metadata FROM report_timeline WHERE reportId = ? ORDER BY dateEvent DESC")?;
 
