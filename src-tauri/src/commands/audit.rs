@@ -40,7 +40,7 @@ pub async fn verify_audit_trail(
     state: tauri::State<'_, AppState>,
     case_id: String,
 ) -> AppResult<AuditTrailVerification> {
-    let conn = state.get_conn().await;
+    let mut conn = state.get_conn().await;
 
     // Get all audit events for case
     let mut stmt = conn.prepare("SELECT id, caseId, action, entityKind, entityId, actor, metadata, imma, imma_precedent, timestamp FROM audit_events WHERE caseId = ? ORDER BY timestamp ASC")?;

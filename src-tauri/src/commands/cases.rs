@@ -56,7 +56,7 @@ pub async fn get_cases(
     statut: Option<String>,
     search: Option<String>,
 ) -> AppResult<Vec<Case>> {
-    let conn = state.get_conn().await;
+    let mut conn = state.get_conn().await;
 
     // Les filtres sont indépendants : une recherche sans filtre de statut ne
     // doit pas retomber implicitement sur `statut = 'ouvert'`, ce qui rendait
@@ -114,7 +114,7 @@ pub async fn get_case(
     state: tauri::State<'_, AppState>,
     id: String,
 ) -> AppResult<Option<Case>> {
-    let conn = state.get_conn().await;
+    let mut conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, reference, titre, description, statut, priorite, categorie, dateCreation, dateMiseJour, tags, meta FROM cases WHERE id = ?")?;
     let case = stmt.query_row(rusqlite::params![id], |row| {
@@ -142,7 +142,7 @@ pub async fn get_case(
 
 #[command]
 pub async fn get_case_stats(state: tauri::State<'_, AppState>) -> AppResult<serde_json::Value> {
-    let conn = state.get_conn().await;
+    let mut conn = state.get_conn().await;
 
     let mut stats = serde_json::Map::new();
 
@@ -172,7 +172,7 @@ pub async fn create_case(
     state: tauri::State<'_, AppState>,
     data: CreateCaseInput,
 ) -> AppResult<Case> {
-    let conn = state.get_conn().await;
+    let mut conn = state.get_conn().await;
     let now = chrono::Utc::now().to_rfc3339();
 
     let id = crate::database::generate_uuid();
@@ -234,7 +234,7 @@ pub async fn update_case(
     id: String,
     data: UpdateCaseInput,
 ) -> AppResult<Case> {
-    let conn = state.get_conn().await;
+    let mut conn = state.get_conn().await;
 
     // Bloc explicite : `Vec<&dyn ToSql>` n'est pas `Sync`, il ne doit donc pas
     // rester vivant au moment du `.await` final, sinon le futur de la commande
@@ -348,7 +348,7 @@ pub async fn delete_case(
     state: tauri::State<'_, AppState>,
     id: String,
 ) -> AppResult<()> {
-    let conn = state.get_conn().await;
+    let mut conn = state.get_conn().await;
 
     // Récupère le dernier hash d'audit pour ce dossier (chaînage).
     let previous_hash: Option<String> = conn

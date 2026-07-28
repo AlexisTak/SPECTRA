@@ -82,7 +82,7 @@ pub async fn get_reports(
 ) -> AppResult<Vec<Report>> {
     let mut conn = state.get_conn().await;
 
-    let query = if let Some(ref cid) = case_id {
+    let query = if let Some(ref _cid) = case_id {
         "SELECT id, reference, caseId, titre, description, statut, dateCreation, dateEcheance, dateCloture, auteur, metadata FROM reports WHERE caseId = ? ORDER BY dateCreation DESC"
     } else {
         "SELECT id, reference, caseId, titre, description, statut, dateCreation, dateEcheance, dateCloture, auteur, metadata FROM reports ORDER BY dateCreation DESC"

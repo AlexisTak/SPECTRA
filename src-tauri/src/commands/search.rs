@@ -18,7 +18,7 @@ pub struct SearchHit {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SearchOptions {
+pub struct _SearchOptions {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
     pub highlight: Option<bool>,
