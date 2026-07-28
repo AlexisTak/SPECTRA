@@ -104,7 +104,7 @@ pub struct CreateSubjectOptions {
 pub async fn create_subject(
     state: tauri::State<'_, AppState>,
     data: CreateSubjectInput,
-    options: Option<CreateSubjectOptions>,
+    _options: Option<CreateSubjectOptions>,
 ) -> AppResult<Subject> {
     let mut conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
@@ -163,8 +163,8 @@ pub async fn create_subject(
             &format!("Subject added: {}", data.nom.unwrap_or_else(|| "Unknown".to_string())),
             &format!("Added subject with status {}", statut),
             &now,
-            &options.as_ref().and_then(|o| o.actor.clone()),
-            &serde_json::to_string(&options)?,
+            &_options.as_ref().and_then(|o| o.actor.clone()),
+            &serde_json::to_string(&_options)?,
         ],
     )?;
 
