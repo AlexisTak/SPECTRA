@@ -154,8 +154,209 @@ export const deleteSubject = (id: string, caseId: string): Promise<void> =>
 // Preuves
 // ---------------------------------------------------------------------------
 
+export interface IntegrityCheck {
+  evidenceId: string
+  nom: string | null
+  /** `intact` | `altered` | `missing` | `no_hash` | `no_path` */
+  status: string
+  expectedHash: string | null
+  actualHash: string | null
+  message: string
+  checkedAt: string
+}
+
+export interface CaseIntegrityReport {
+  caseId: string
+  total: number
+  intact: number
+  altered: number
+  missing: number
+  noHash: number
+  checks: IntegrityCheck[]
+  generatedAt: string
+}
+
 export const listEvidence = (caseId: string): Promise<EvidenceRecord[]> =>
   tauriInvoke<EvidenceRecord[]>('get_evidence', { caseId })
+
+/**
+ * Ingère une preuve à partir d'un chemin de fichier.
+ *
+ * Le backend lit le fichier, calcule son empreinte et le copie dans le magasin.
+ * L'empreinte n'est **jamais** fournie par le frontend : une valeur que le
+ * système n'a pas observée n'atteste rien (`audit.md`, P1-2).
+ */
+export const addEvidence = (
+  caseId: string,
+  chemin: string,
+  data: {
+    type: string
+    nom?: string | null
+    description?: string | null
+    source?: string | null
+    sourceUrl?: string | null
+  },
+): Promise<EvidenceRecord> =>
+  tauriInvoke<EvidenceRecord>('add_evidence', {
+    caseId,
+    data: { caseId, chemin, ...data },
+    options: null,
+  })
+
+export const deleteEvidence = (id: string, caseId: string): Promise<void> =>
+  tauriInvoke<void>('delete_evidence', { id, caseId, options: null })
+
+/** Relit le fichier et recompare son empreinte. */
+export const verifyEvidence = (evidenceId: string): Promise<IntegrityCheck> =>
+  tauriInvoke<IntegrityCheck>('verify_evidence', { evidenceId })
+
+/** Vérifie toutes les preuves d'un dossier. */
+export const verifyCaseEvidence = (
+  caseId: string,
+): Promise<CaseIntegrityReport> =>
+  tauriInvoke<CaseIntegrityReport>('verify_case_evidence', { caseId })
+
+// ---------------------------------------------------------------------------
+// Claims (qualification des éléments)
+// ---------------------------------------------------------------------------
+
+export type Qualification = 'preuve' | 'indice' | 'hypothese' | 'non_verifie'
+
+export interface ClaimRecord {
+  id: string
+  caseId: string
+  refKind: string
+  refId: string
+  qualification: Qualification
+  fiabilite: number
+  source: string | null
+  sourceUrl: string | null
+  takenBy: string | null
+  notes: string | null
+  datePreuve: string | null
+  metadata: unknown
+}
+
+export const listClaims = (caseId: string): Promise<ClaimRecord[]> =>
+  tauriInvoke<ClaimRecord[]>('list_claims', { caseId })
+
+export const setClaim = (input: {
+  caseId: string
+  refKind: string
+  refId: string
+  qualification: Qualification
+  fiabilite: number
+  source: string
+  notes?: string | null
+}): Promise<ClaimRecord> =>
+  tauriInvoke<ClaimRecord>('set_claim', {
+    input: {
+      sourceUrl: null,
+      takenBy: null,
+      notes: null,
+      datePreuve: null,
+      metadata: null,
+      ...input,
+    },
+  })
+
+export const deleteClaim = (id: string, caseId: string): Promise<void> =>
+  tauriInvoke<void>('delete_claim', { id, caseId })
+
+// ---------------------------------------------------------------------------
+// Recherche
+// ---------------------------------------------------------------------------
+
+export interface SearchHit {
+  id: string
+  kind: string
+  caseId: string | null
+  title: string
+  snippet: string
+  score: number
+}
+
+export const search = (
+  query: string,
+  kinds?: string[],
+  caseId?: string,
+): Promise<SearchHit[]> =>
+  tauriInvoke<SearchHit[]>('search_action', {
+    query,
+    kinds: kinds ?? null,
+    caseId: caseId ?? null,
+  })
+
+export const reindexAll = (): Promise<void> => tauriInvoke<void>('reindex_all')
+
+// ---------------------------------------------------------------------------
+// Instantanés
+// ---------------------------------------------------------------------------
+
+export interface SnapshotRecord {
+  id: string
+  caseId: string
+  nom: string
+  description: string | null
+  hashSha256: string
+  taille: number | null
+  createdAt: string
+}
+
+export const listSnapshots = (caseId: string): Promise<SnapshotRecord[]> =>
+  tauriInvoke<SnapshotRecord[]>('list_snapshots', { caseId })
+
+export const takeSnapshot = (input: {
+  caseId: string
+  nom: string
+  description?: string | null
+}): Promise<SnapshotRecord> =>
+  tauriInvoke<SnapshotRecord>('take_snapshot', {
+    input: { description: null, metadata: null, ...input },
+  })
+
+export const deleteSnapshot = (id: string): Promise<void> =>
+  tauriInvoke<void>('delete_snapshot', { id })
+
+// ---------------------------------------------------------------------------
+// Rapports
+// ---------------------------------------------------------------------------
+
+export interface ReportRecord {
+  id: string
+  reference: string
+  caseId: string
+  titre: string
+  description: string | null
+  statut: string
+  dateCreation: string
+  dateEcheance: string | null
+  dateCloture: string | null
+  auteur: string | null
+  metadata: unknown
+}
+
+export const listReports = (caseId?: string): Promise<ReportRecord[]> =>
+  tauriInvoke<ReportRecord[]>('get_reports', { caseId: caseId ?? null })
+
+export const createReport = (data: {
+  caseId: string
+  titre: string
+  description?: string | null
+  auteur?: string | null
+}): Promise<ReportRecord> =>
+  tauriInvoke<ReportRecord>('create_report', {
+    data: {
+      statut: null,
+      dateEcheance: null,
+      auteur: null,
+      metadata: null,
+      ...data,
+    },
+  })
+
+export const deleteReport = (id: string): Promise<void> =>
+  tauriInvoke<void>('delete_report', { id })
 
 // ---------------------------------------------------------------------------
 // Journal du dossier

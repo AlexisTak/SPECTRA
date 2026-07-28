@@ -18,16 +18,16 @@ import {
   deleteSubject,
   getCase,
   listEvents,
-  listEvidence,
   listSubjects,
   verifyAuditTrail,
   type CaseRecord,
   type CaseEventRecord,
-  type EvidenceRecord,
   type SubjectRecord,
   type SubjectStatus,
 } from '@/lib/api'
 import { useAsync } from '@/lib/hooks/useCases'
+import { EvidencePanel } from '@/components/evidence/evidence-panel'
+import { SnapshotsPanel } from '@/components/snapshots/snapshots-panel'
 import { PageHeader } from '@/components/layout/shell'
 import {
   Badge,
@@ -129,6 +129,7 @@ function CaseDetail() {
 
         <div className="flex flex-col gap-6">
           <IntegrityPanel caseId={id} />
+          <SnapshotsPanel caseId={id} />
 
           <Panel title="Métadonnées">
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
@@ -253,48 +254,6 @@ function SubjectsPanel({ caseId }: { caseId: string }) {
               <Button variant="danger" onClick={() => void remove(s.id)}>
                 Supprimer
               </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Panel>
-  )
-}
-
-// ---------------------------------------------------------------------------
-
-function EvidencePanel({ caseId }: { caseId: string }) {
-  const { data, loading, error } = useAsync<EvidenceRecord[]>(
-    () => listEvidence(caseId),
-    [caseId],
-  )
-  const evidence = data ?? []
-
-  return (
-    <Panel title={`Preuves (${evidence.length})`}>
-      {error && <ErrorBox message={error} />}
-      {loading && <p className="text-sm text-[var(--color-muted)]">Chargement…</p>}
-
-      {!loading && !error && evidence.length === 0 && (
-        <EmptyState
-          title="Aucune preuve"
-          hint="L'ajout de preuves depuis l'interface reste à construire : il doit calculer l'empreinte du fichier à l'ingestion, pas la recevoir du client."
-        />
-      )}
-
-      {evidence.length > 0 && (
-        <ul className="flex flex-col divide-y divide-[var(--color-edge)]">
-          {evidence.map((e) => (
-            <li key={e.id} className="flex flex-col gap-1 py-2.5">
-              <span className="flex items-center justify-between gap-3">
-                <span className="truncate text-sm">{e.nom ?? 'Sans nom'}</span>
-                <Badge value={e.statut} />
-              </span>
-              {e.hashSha256 && (
-                <code className="truncate text-xs text-[var(--color-muted)]">
-                  SHA-256 {e.hashSha256}
-                </code>
-              )}
             </li>
           ))}
         </ul>

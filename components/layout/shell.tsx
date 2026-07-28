@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils'
 const NAV = [
   { href: '/', label: 'Tableau de bord' },
   { href: '/cases', label: 'Dossiers' },
+  { href: '/search', label: 'Recherche' },
+  { href: '/reports', label: 'Rapports' },
   { href: '/audit', label: 'Intégrité' },
 ] as const
 

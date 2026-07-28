@@ -23,19 +23,27 @@ use tokio::sync::Mutex;
 /// interblocages dans le code d'origine (`audit.md`, P2-8).
 pub struct AppState {
     conn: Mutex<Connection>,
+    /// Racine du magasin de preuves, sous le répertoire de données applicatives.
+    storage_root: std::path::PathBuf,
 }
 
 impl AppState {
     /// Construit l'état à partir d'une connexion déjà initialisée.
-    pub fn new(conn: Connection) -> Self {
+    pub fn new(conn: Connection, storage_root: std::path::PathBuf) -> Self {
         Self {
             conn: Mutex::new(conn),
+            storage_root,
         }
     }
 
     /// Prend le verrou sur la connexion.
     pub async fn get_conn(&self) -> tokio::sync::MutexGuard<'_, Connection> {
         self.conn.lock().await
+    }
+
+    /// Racine du magasin de preuves.
+    pub fn storage_root(&self) -> &std::path::Path {
+        &self.storage_root
     }
 }
 
@@ -742,11 +750,18 @@ fn create_tags_tables(conn: &Connection) -> AppResult<()> {
 // =============================================================================
 
 pub fn sha256_hash(data: &str) -> String {
-    use sha2::{Sha256, Digest};
+    sha256_hash_bytes(data.as_bytes())
+}
+
+/// Empreinte SHA-256 d'un contenu binaire.
+///
+/// Utilisée à l'ingestion d'une preuve et à chaque vérification : c'est la même
+/// fonction des deux côtés, sinon la comparaison n'aurait pas de sens.
+pub fn sha256_hash_bytes(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
-    hasher.update(data.as_bytes());
-    let result = hasher.finalize();
-    hex::encode(result)
+    hasher.update(data);
+    hex::encode(hasher.finalize())
 }
 
 pub fn generate_case_reference(conn: &Connection) -> AppResult<String> {

@@ -7,7 +7,7 @@
 //! progressivement par les crates du workspace.
 
 mod commands;
-mod database;
+pub mod database;
 mod error;
 
 pub use database::AppState;
@@ -28,8 +28,16 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
+
+            // Magasin de preuves : les fichiers sont **copiés** ici à
+            // l'ingestion. Conserver un simple chemin vers un fichier externe
+            // ne garantit rien — il peut être modifié ou supprimé après
+            // enregistrement (`audit.md`, P1-2).
+            let storage_root = data_dir.join("storage");
+            std::fs::create_dir_all(&storage_root)?;
+
             let conn = database::init_database(&data_dir.join("casetrack.db"))?;
-            app.manage(AppState::new(conn));
+            app.manage(AppState::new(conn, storage_root));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
