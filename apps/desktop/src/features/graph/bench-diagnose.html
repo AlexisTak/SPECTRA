@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>SPECTRA — diagnostic du blocage</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; background: #0b1120; color: #e2e8f0;
+             font: 14px/1.6 ui-sans-serif, system-ui, sans-serif; }
+      #graph { position: absolute; inset: 0; }
+      #hud { position: absolute; top: 12px; left: 12px; z-index: 10;
+             background: rgba(15,23,42,.94); border: 1px solid #1e293b;
+             border-radius: 8px; padding: 14px 18px; min-width: 380px; }
+      h1 { font-size: 13px; margin: 0 0 10px; letter-spacing: .04em;
+           text-transform: uppercase; color: #94a3b8; }
+      table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+      th, td { padding: 3px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+      th:first-child, td:first-child { text-align: left; color: #94a3b8; }
+      thead th { color: #cbd5e1; border-bottom: 1px solid #1e293b; }
+      .ok { color: #4ade80; } .ko { color: #f87171; }
+      #verdict { margin-top: 12px; padding-top: 10px; border-top: 1px solid #1e293b;
+                 color: #fbbf24; max-width: 380px; }
+    </style>
+  </head>
+  <body>
+    <div id="graph"></div>
+    <div id="hud">
+      <h1>Diagnostic du blocage</h1>
+      <div id="status">Mesure en cours (deux passes)…</div>
+      <div id="table"></div>
+      <div id="verdict"></div>
+    </div>
+    <script type="module">
+      import { runDiagnose } from './bench-diagnose.ts'
+
+      const p = new URLSearchParams(location.search)
+      const nodes = Number(p.get('nodes') ?? 50000)
+      const edges = Number(p.get('edges') ?? 150000)
+
+      const cls = (v, min) => (v >= min ? 'ok' : 'ko')
+
+      runDiagnose(nodes, edges)
+        .then((r) => {
+          document.getElementById('status').textContent = 'Terminé'
+          const rows = [r.withoutSigma, r.withSigma].map((s) => `
+            <tr>
+              <td>${s.label}</td>
+              <td class="${cls(s.fpsAvg, 45)}">${s.fpsAvg}</td>
+              <td class="${cls(s.fpsP5, 45)}">${s.fpsP5}</td>
+              <td class="${s.longestFrameMs < 500 ? 'ok' : 'ko'}">${s.longestFrameMs} ms</td>
+            </tr>`).join('')
+          document.getElementById('table').innerHTML = `
+            <table>
+              <thead><tr><th>Configuration</th><th>FPS moy</th><th>FPS p5</th><th>Frame max</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>`
+          document.getElementById('verdict').textContent = r.verdict
+        })
+        .catch((e) => {
+          document.getElementById('status').textContent = `Échec : ${e.message}`
+          document.getElementById('status').className = 'ko'
+          window.__DIAGNOSE_ERROR__ = String(e && e.stack ? e.stack : e)
+        })
+    </script>
+  </body>
+</html>

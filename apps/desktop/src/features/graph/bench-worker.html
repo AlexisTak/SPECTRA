@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>SPECTRA — layout en Web Worker</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #0b1120; color: #e2e8f0;
+             font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+      #graph { position: absolute; inset: 0; }
+      #hud { position: absolute; top: 12px; left: 12px; z-index: 10;
+             background: rgba(15,23,42,.92); border: 1px solid #1e293b;
+             border-radius: 8px; padding: 12px 16px; min-width: 300px; }
+      #hud h1 { font-size: 13px; margin: 0 0 8px; letter-spacing: .04em;
+                text-transform: uppercase; color: #94a3b8; }
+      dl { display: grid; grid-template-columns: auto auto; gap: 2px 16px; margin: 8px 0 0; }
+      dt { color: #94a3b8; }
+      dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+      .ok { color: #4ade80; }
+      .ko { color: #f87171; }
+      #live { color: #cbd5e1; font-variant-numeric: tabular-nums; }
+    </style>
+  </head>
+  <body>
+    <div id="graph"></div>
+    <div id="hud">
+      <h1>Layout en Web Worker</h1>
+      <div id="status">Génération du graphe…</div>
+      <div id="live"></div>
+      <dl id="metrics"></dl>
+    </div>
+    <script type="module">
+      import { runWorkerBench } from './bench-worker.ts'
+
+      const p = new URLSearchParams(location.search)
+      const nodes = Number(p.get('nodes') ?? 50000)
+      const edges = Number(p.get('edges') ?? 150000)
+
+      const status = document.getElementById('status')
+      const metrics = document.getElementById('metrics')
+
+      const row = (l, v, c = '') => `<dt>${l}</dt><dd class="${c}">${v}</dd>`
+
+      status.textContent = 'Layout en cours (worker)…'
+
+      runWorkerBench(nodes, edges)
+        .then((r) => {
+          status.textContent = r.passed
+            ? 'Thread principal resté réactif'
+            : 'Thread principal bloqué'
+          status.className = r.passed ? 'ok' : 'ko'
+          document.getElementById('live').textContent = ''
+          metrics.innerHTML = [
+            row('Nœuds', r.nodes.toLocaleString('fr-FR')),
+            row('Arêtes', r.edges.toLocaleString('fr-FR')),
+            row('Génération', `${r.generationMs} ms`),
+            row('Layout', `${(r.layoutMs / 1000).toFixed(1)} s`),
+            row('Arrêt', r.layoutReason),
+            row('FPS pendant layout', r.fpsDuringLayoutAvg,
+                r.fpsDuringLayoutAvg >= 45 ? 'ok' : 'ko'),
+            row('FPS p5 pendant', r.fpsDuringLayoutP5,
+                r.fpsDuringLayoutP5 >= 45 ? 'ok' : 'ko'),
+            row('Frame la + longue', `${r.longestFrameMs} ms`,
+                r.longestFrameMs < 500 ? 'ok' : 'ko'),
+            row('Mémoire', `${r.heapMb} Mo`),
+          ].join('')
+        })
+        .catch((e) => {
+          status.textContent = `Échec : ${e.message}`
+          status.className = 'ko'
+          window.__WORKER_BENCH_ERROR__ = String(e && e.stack ? e.stack : e)
+        })
+    </script>
+  </body>
+</html>

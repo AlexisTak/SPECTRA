@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>SPECTRA — rendu seul (contrôle)</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; background: #0b1120; color: #e2e8f0;
+             font: 14px/1.6 ui-sans-serif, system-ui, sans-serif; }
+      #graph { position: absolute; inset: 0; }
+      #hud { position: absolute; top: 12px; left: 12px; z-index: 10;
+             background: rgba(15,23,42,.94); border: 1px solid #1e293b;
+             border-radius: 8px; padding: 14px 18px; min-width: 340px; }
+      h1 { font-size: 13px; margin: 0 0 10px; letter-spacing: .04em;
+           text-transform: uppercase; color: #94a3b8; }
+      table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+      th, td { padding: 3px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+      th:first-child, td:first-child { text-align: left; color: #94a3b8; }
+      thead th { color: #cbd5e1; border-bottom: 1px solid #1e293b; }
+      .ok { color: #4ade80; } .ko { color: #f87171; }
+    </style>
+  </head>
+  <body>
+    <div id="graph"></div>
+    <div id="hud">
+      <h1>Rendu seul — sans layout</h1>
+      <div id="status">Mesure en cours (deux passes)…</div>
+      <div id="out"></div>
+    </div>
+    <script type="module">
+      import { runRenderOnly } from './bench-render-only.ts'
+
+      const p = new URLSearchParams(location.search)
+      const nodes = Number(p.get('nodes') ?? 50000)
+      const edges = Number(p.get('edges') ?? 150000)
+
+      runRenderOnly(nodes, edges).then((rows) => {
+        document.getElementById('status').textContent = 'Terminé'
+        const body = rows.map((r) => `
+          <tr>
+            <td>${r.spread}</td>
+            <td class="${r.fpsAvg >= 45 ? 'ok' : 'ko'}">${r.fpsAvg}</td>
+            <td class="${r.fpsP5 >= 45 ? 'ok' : 'ko'}">${r.fpsP5}</td>
+            <td>${r.longestFrameMs} ms</td>
+          </tr>`).join('')
+        document.getElementById('out').innerHTML = `
+          <table>
+            <thead><tr><th>Positions</th><th>FPS moy</th><th>FPS p5</th><th>Frame max</th></tr></thead>
+            <tbody>${body}</tbody>
+          </table>`
+      })
+    </script>
+  </body>
+</html>

@@ -44,10 +44,18 @@ Contrainte de performance (§12 Phase 2) :
 |---|---|---|---|
 | Nœuds | 50 000 | 50 000 | conforme |
 | Arêtes | 150 000 | 150 000 | conforme |
-| FPS (pan/zoom) | ≥ 45 | **53** (p5), 65 (moyen) | tenu |
-| Mémoire | < 1,5 Go | 93 Mo | tenu |
 | Layout FA2 | < 30 s | **5,8 s** | tenu |
-| Layout en Web Worker | obligatoire | **non fait** | **à faire** |
+| Mémoire | < 1,5 Go | 93 Mo | tenu |
+| **FPS (pan/zoom)** | ≥ 45 | **non mesurable** dans cet environnement | **non statué** |
+| Layout en Web Worker | obligatoire | fait (`layout-worker.ts`) | à re-valider |
+
+> **Correction du 2026-07-28.** Une version antérieure de cet ADR annonçait
+> « 53 fps (p5), tenu ». **Ce chiffre n'est pas fiable et le critère FPS n'est
+> pas statué.** Le banc rejoué une heure plus tard, sans modification de code,
+> a donné 36 puis 1 fps. Diagnostic : dans un Chromium piloté par Playwright,
+> `requestAnimationFrame` est bridé à **1 Hz** — vérifié sur une page vide, sans
+> Sigma ni graphe (3 frames en 2 s, delta médian 1 000 ms). Les mesures de FPS
+> obtenues ainsi ne mesurent pas le rendu, mais le throttling du navigateur.
 
 Détail, méthode et réserves : `docs/bench/README.md`.
 
@@ -64,11 +72,33 @@ Les seuils de LOD sur les étiquettes (`labelRenderedSizeThreshold: 14`,
 
 Ces deux réglages ne sont pas cosmétiques — sans eux le critère n'est pas tenu.
 
+## Ce que le worker a réellement apporté
+
+Le layout est désormais déporté (`layout-worker.ts`, `runLayoutDetached`). Le
+diagnostic mené au passage a une valeur qui dépasse la mesure de FPS, parce
+qu'il porte sur des temps de blocage — non affectés par le throttling :
+
+| Configuration | Frame la plus longue |
+|---|---|
+| superviseur FA2 avec Sigma attaché au graphe calculé | 1 017 ms |
+| superviseur FA2 sur graphe détaché, sans observateur | **33 ms** |
+
+Déporter le *calcul* ne suffisait pas : `assignLayoutChanges` réécrit les 50 000
+attributs sur le thread principal à chaque message du worker, et chaque écriture
+déclenche une réindexation de Sigma. D'où le graphe de travail détaché, avec
+recopie des positions à cadence choisie.
+
+Corollaire mesuré : recopier ces positions avec `setNodeAttribute` (100 000
+événements) est **pire** que la version synchrone. Il faut
+`updateEachNodeAttributes`, qui n'émet qu'un seul événement.
+
 ## Reste à faire avant de clore la Phase 2
 
-1. **Déporter FA2 dans un Web Worker** (exigence explicite du §3). Le layout gèle
-   actuellement l'interface 5,8 s.
-2. **Rejouer la mesure dans la coquille Tauri** (WebView2), pas seulement dans
-   Chromium sous Playwright.
-3. Mesurer à nouveau **avec les interactions** (sélection, survol, expansion),
-   qui ajoutent un coût par frame non couvert ici.
+1. **Mesurer les FPS dans un environnement non bridé.** Ni Chromium/Playwright
+   headless, ni fenêtre non composée. Deux pistes : la coquille Tauri réelle
+   (WebView2) avec fenêtre au premier plan, ou un compteur intégré à
+   l'application affiché à l'écran de l'analyste.
+2. **Re-valider le worker** une fois les FPS mesurables, pour vérifier que la
+   réactivité pendant le layout tient réellement le budget.
+3. Mesurer **avec les interactions** (sélection, survol, expansion), qui
+   ajoutent un coût par frame non couvert ici.
