@@ -1,0 +1,28 @@
+{
+  "$schema": "https://tauri.app/schema/capabilities/capability.schema.json",
+  "identifier": "default",
+  "description": "Default permissions for Cekarna",
+  "windows": ["main"],
+  "platforms": ["windows", "macOS", "linux"],
+  "permissions": [
+    "core:path:default",
+    "core:window:default",
+    "core:window:allow-create",
+    "core:window:allow-set-title",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-show",
+    "core:window:allow-start-dragging",
+    "core:app:allow-app-hide",
+    "core:app:allow-app-show",
+    "shell:allow-open",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
+    "dialog:allow-ask",
+    "dialog:allow-confirm"
+  ]
+}

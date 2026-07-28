@@ -1,0 +1,63 @@
+# Tauri
+target/
+src-tauri/target/
+*.pdb
+Cargo.lock
+**/.cargo/
+**/target/
+
+# Build artifacts
+out/
+.next/
+.next/
+dist/
+build/
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.msi
+*.pkg
+*.tar.gz
+*.zip
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Database
+casetrack.db
+casetrack.db-shm
+casetrack.db-wal
+*.db
+*.db-shm
+*.db-wal
+
+# Data storage
+.storage/
+.data/
+
+# Node modules
+node_modules/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+
+# Coverage
+coverage/
+.nyc_output/

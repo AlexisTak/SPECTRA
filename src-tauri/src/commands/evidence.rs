@@ -1,0 +1,266 @@
+//! Evidence commands module
+//!
+//! Manages evidence items with integrity verification.
+
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use tauri::command;
+use chrono::Utc;
+use crate::database::AppState;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Evidence {
+    pub id: String,
+    pub case_id: String,
+    pub r#type: String,
+    pub nom: Option<String>,
+    pub description: Option<String>,
+    pub chemin: Option<String>,
+    pub hash_sha256: Option<String>,
+    pub hash_md5: Option<String>,
+    pub taille: Option<i64>,
+    pub date_ajout: String,
+    pub statut: String,
+    pub source: Option<String>,
+    pub source_url: Option<String>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct IntegrityCheck {
+    pub evidence_id: String,
+    pub hash_sha256: String,
+    pub hash_md5: String,
+    pub verified: bool,
+    pub message: String,
+    pub checked_at: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CaseIntegrityReport {
+    pub case_id: String,
+    pub total_evidence: i64,
+    pub verified_count: i64,
+    pub broken_count: i64,
+    pub last_check: Option<String>,
+}
+
+// =============================================================================
+// GET EVIDENCE
+// =============================================================================
+
+#[command]
+pub async fn get_evidence(
+    state: tauri::State<'_, AppState>,
+    case_id: String,
+) -> Result<Vec<Evidence>> {
+    let mut conn = state.get_conn().await;
+
+    let mut stmt = conn.prepare("SELECT id, caseId, type, nom, description, chemin, hash_sha256, hash_md5, taille, dateAjout, statut, source, sourceUrl, metadata FROM evidence WHERE caseId = ? ORDER BY dateAjout DESC")?;
+
+    let evidence = stmt.query_map(rusqlite::params![case_id], |row| {
+        Ok(Evidence {
+            id: row.get(0)?,
+            case_id: row.get(1)?,
+            r#type: row.get(2)?,
+            nom: row.get(3)?,
+            description: row.get(4)?,
+            chemin: row.get(5)?,
+            hash_sha256: row.get(6)?,
+            hash_md5: row.get(7)?,
+            taille: row.get(8)?,
+            date_ajout: row.get(9)?,
+            statut: row.get(10)?,
+            source: row.get(11)?,
+            source_url: row.get(12)?,
+            metadata: row.get(13)?,
+        })
+    })?;
+
+    let result: Result<Vec<_>, _> = evidence.collect();
+    Ok(result?)
+}
+
+// =============================================================================
+// ADD EVIDENCE
+// =============================================================================
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AddEvidenceInput {
+    pub case_id: String,
+    pub r#type: String,
+    pub nom: Option<String>,
+    pub description: Option<String>,
+    pub chemin: Option<String>,
+    pub hash_sha256: Option<String>,
+    pub hash_md5: Option<String>,
+    pub taille: Option<i64>,
+    pub source: Option<String>,
+    pub source_url: Option<String>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AddEvidenceOptions {
+    pub actor: Option<String>,
+    pub source: Option<String>,
+    pub reliability: Option<i32>,
+    pub qualification: Option<String>,
+    pub source_url: Option<String>,
+}
+
+#[command]
+pub async fn add_evidence(
+    state: tauri::State<'_, AppState>,
+    case_id: String,
+    data: AddEvidenceInput,
+    options: Option<AddEvidenceOptions>,
+) -> Result<Evidence> {
+    let mut conn = state.get_conn().await;
+    let now = Utc::now().to_rfc3339();
+
+    // Check if case exists
+    let case_exists: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM cases WHERE id = ?",
+        rusqlite::params![case_id],
+        |row| row.get(0),
+    )?;
+    if case_exists == 0 {
+        return Err(anyhow::anyhow!("Case not found: {}", case_id));
+    }
+
+    let id = crate::database::generate_uuid();
+
+    conn.execute(
+        "INSERT INTO evidence (id, caseId, type, nom, description, chemin, hash_sha256, hash_md5, taille, dateAjout, statut, source, sourceUrl, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        rusqlite::params![
+            &id,
+            &case_id,
+            &data.r#type,
+            &data.nom,
+            &data.description,
+            &data.chemin,
+            &data.hash_sha256,
+            &data.hash_md5,
+            &data.taille,
+            &now,
+            &"en_attente",
+            &data.source,
+            &data.source_url,
+            &data.metadata,
+        ],
+    )?;
+
+    // Add to FTS index
+    if let Some(nom) = &data.nom {
+        conn.execute(
+            "INSERT INTO fts_evidence (rowid, nom, description, chemin) VALUES (?, ?, ?, ?)",
+            rusqlite::params![&id, nom, &data.description, &data.chemin],
+        )?;
+    }
+
+    // Add case event
+    conn.execute(
+        "INSERT INTO case_events (id, caseId, type, titre, description, timestamp, actor, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        rusqlite::params![
+            &format!("CE-{}-000001", Utc::now().year()),
+            &case_id,
+            "evidence_added",
+            &format!("Evidence added: {}", data.nom.unwrap_or_else(|| "Unknown".to_string())),
+            &format!("Added {} evidence to case", data.r#type),
+            &now,
+            &options.as_ref().and_then(|o| o.actor.clone()),
+            &serde_json::to_string(&options)?,
+        ],
+    )?;
+
+    // Re-fetch to get full record
+    get_evidence_single(&mut *conn, &id)
+}
+
+fn get_evidence_single(conn: &mut rusqlite::Connection, id: &str) -> Result<Evidence> {
+    let mut stmt = conn.prepare("SELECT id, caseId, type, nom, description, chemin, hash_sha256, hash_md5, taille, dateAjout, statut, source, sourceUrl, metadata FROM evidence WHERE id = ?")?;
+
+    let evidence = stmt.query_row(rusqlite::params![id], |row| {
+        Ok(Evidence {
+            id: row.get(0)?,
+            case_id: row.get(1)?,
+            r#type: row.get(2)?,
+            nom: row.get(3)?,
+            description: row.get(4)?,
+            chemin: row.get(5)?,
+            hash_sha256: row.get(6)?,
+            hash_md5: row.get(7)?,
+            taille: row.get(8)?,
+            date_ajout: row.get(9)?,
+            statut: row.get(10)?,
+            source: row.get(11)?,
+            source_url: row.get(12)?,
+            metadata: row.get(13)?,
+        })
+    })?;
+
+    Ok(evidence)
+}
+
+// =============================================================================
+// DELETE EVIDENCE
+// =============================================================================
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct DeleteEvidenceOptions {
+    pub actor: Option<String>,
+}
+
+#[command]
+pub async fn delete_evidence(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    case_id: String,
+    options: Option<DeleteEvidenceOptions>,
+) -> Result<()> {
+    let mut conn = state.get_conn().await;
+
+    // Check evidence exists
+    let exists: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM evidence WHERE id = ?",
+        rusqlite::params![id],
+        |row| row.get(0),
+    )?;
+    if exists == 0 {
+        return Err(anyhow::anyhow!("Evidence not found: {}", id));
+    }
+
+    // Get evidence details before delete
+    let evidence = get_evidence_single(&mut *conn, &id)?;
+
+    // Remove from FTS index
+    conn.execute(
+        "DELETE FROM fts_evidence WHERE rowid = ?",
+        rusqlite::params![&id],
+    )?;
+
+    // Delete evidence
+    conn.execute(
+        "DELETE FROM evidence WHERE id = ?",
+        rusqlite::params![&id],
+    )?;
+
+    // Add case event
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO case_events (id, caseId, type, titre, description, timestamp, actor, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        rusqlite::params![
+            &format!("CE-{}-000001", Utc::now().year()),
+            &case_id,
+            "evidence_deleted",
+            &format!("Evidence deleted: {}", evidence.nom.unwrap_or_else(|| "Unknown".to_string())),
+            &format!("Removed {} evidence from case", evidence.r#type),
+            &now,
+            &options.as_ref().and_then(|o| o.actor.clone()),
+            &serde_json::to_string(&options)?,
+        ],
+    )?;
+
+    Ok(())
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://tauri.app/schema/tauri.conf.json",
+  "productName": "Cekarna",
+  "version": "0.1.0",
+  "identifier": "com.cekarna.enquetes",
+  "build": {
+    "frontendDist": "../out"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "shell": {"enabled": true},
+    "dialog": {"enabled": true}
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Cekarna",
+        "width": 1280,
+        "height": 720,
+        "minWidth": 800,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "capabilities": ["default"]
+    }
+  }
+}
