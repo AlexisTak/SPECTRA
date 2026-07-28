@@ -6,57 +6,41 @@
 //! - Triggers for audit trail and integrity
 //! - WAL mode for concurrent access
 
-use anyhow::Result;
+use crate::error::AppResult;
 use chrono::{Datelike, Utc};
 use rusqlite::{Connection, params};
 use std::path::Path;
 use tokio::sync::Mutex;
 
-/// Application state shared across commands
-/// Uses tokio::sync::Mutex which can wrap !Sync types
-#[derive(Clone)]
+/// État applicatif partagé par les commandes.
+///
+/// `tokio::sync::Mutex` est utilisé car il peut envelopper un type `!Sync`.
+/// Le type n'est délibérément **pas** `Clone` : `Mutex<Connection>` ne l'est
+/// pas, et dupliquer la connexion à la base d'enquête n'aurait pas de sens.
+///
+/// Ce mutex n'est **pas réentrant** : une fonction qui détient déjà le verrou ne
+/// doit jamais appeler une fonction qui le reprend — cause de deux
+/// interblocages dans le code d'origine (`audit.md`, P2-8).
 pub struct AppState {
     conn: Mutex<Connection>,
 }
 
 impl AppState {
-    pub fn new() -> Self {
+    /// Construit l'état à partir d'une connexion déjà initialisée.
+    pub fn new(conn: Connection) -> Self {
         Self {
-            conn: Mutex::new(
-                Connection::open_in_memory().expect("Failed to create in-memory database")
-            ),
+            conn: Mutex::new(conn),
         }
     }
 
-    pub fn set_connection(&mut self, conn: Connection) {
-        self.conn = Mutex::new(conn);
-    }
-
+    /// Prend le verrou sur la connexion.
     pub async fn get_conn(&self) -> tokio::sync::MutexGuard<'_, Connection> {
         self.conn.lock().await
-    }
-
-    pub fn get_mutex(&self) -> &Mutex<Connection> {
-        &self.conn
-    }
-
-    pub async fn execute<F, T>(&self, f: F) -> Result<T>
-    where
-        F: FnOnce(&mut Connection) -> Result<T>,
-    {
-        let mut conn = self.conn.lock().await;
-        f(&mut *conn)
-    }
-}
-
-impl Default for AppState {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
 /// Initialize the database with all tables and triggers
-pub fn init_database(db_path: &Path) -> Result<Connection> {
+pub fn init_database(db_path: &Path) -> AppResult<Connection> {
     let conn = Connection::open(db_path)?;
 
     // Enable WAL mode for concurrent access
@@ -71,7 +55,7 @@ pub fn init_database(db_path: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
-fn create_tables(conn: &Connection) -> Result<()> {
+fn create_tables(conn: &Connection) -> AppResult<()> {
     // 1. Cases table
     conn.execute_batch(CASES_TABLE)?;
 
@@ -498,7 +482,7 @@ CREATE TABLE IF NOT EXISTS audit_settings (
 // FTS5 SEARCH TABLES
 // =============================================================================
 
-fn create_fts_tables(conn: &Connection) -> Result<()> {
+fn create_fts_tables(conn: &Connection) -> AppResult<()> {
     conn.execute_batch(r#"
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_cases USING fts5(
             reference,
@@ -573,7 +557,7 @@ fn create_fts_tables(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-fn create_fts_triggers(conn: &Connection) -> Result<()> {
+fn create_fts_triggers(conn: &Connection) -> AppResult<()> {
     conn.execute_batch(r#"
         CREATE TRIGGER IF NOT EXISTS cases_ai AFTER INSERT ON cases BEGIN
             INSERT INTO fts_cases(rowid, reference, titre, description)
@@ -650,7 +634,7 @@ fn create_fts_triggers(conn: &Connection) -> Result<()> {
 // AUDIT TRAIL TRIGGERS
 // =============================================================================
 
-fn create_audit_triggers(conn: &Connection) -> Result<()> {
+fn create_audit_triggers(conn: &Connection) -> AppResult<()> {
     conn.execute_batch(r#"
         CREATE TRIGGER IF NOT EXISTS audit_insert AFTER INSERT ON cases BEGIN
             INSERT INTO audit_events (id, caseId, action, entityKind, entityId, imma, imma_precedent, metadata)
@@ -694,7 +678,7 @@ fn create_audit_triggers(conn: &Connection) -> Result<()> {
 // INTEGRITY TRIGGERS
 // =============================================================================
 
-fn create_integrity_triggers(conn: &Connection) -> Result<()> {
+fn create_integrity_triggers(conn: &Connection) -> AppResult<()> {
     conn.execute_batch(r#"
         CREATE TRIGGER IF NOT EXISTS evidence_integrity AFTER UPDATE ON evidence
         WHEN new.hash_sha256 IS NOT NULL AND old.hash_sha256 IS NULL BEGIN
@@ -721,8 +705,11 @@ fn create_integrity_triggers(conn: &Connection) -> Result<()> {
 // TAGS TABLES
 // =============================================================================
 
-fn create_tags_tables(conn: &Connection) -> Result<()> {
-    conn.execute_batch(r#"
+fn create_tags_tables(conn: &Connection) -> AppResult<()> {
+    // Le `?` manquait : l'échec de création de la table était silencieusement
+    // ignoré (`audit.md`, P3-9).
+    conn.execute_batch(
+        r#"
         CREATE TABLE IF NOT EXISTS tags (
             id TEXT PRIMARY KEY,
             nom TEXT UNIQUE NOT NULL,
@@ -730,7 +717,8 @@ fn create_tags_tables(conn: &Connection) -> Result<()> {
             color TEXT DEFAULT 'blue',
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
-    "#);
+    "#,
+    )?;
 
     Ok(())
 }
@@ -747,7 +735,7 @@ pub fn sha256_hash(data: &str) -> String {
     hex::encode(result)
 }
 
-pub fn generate_case_reference(conn: &Connection) -> Result<String> {
+pub fn generate_case_reference(conn: &Connection) -> AppResult<String> {
     let year = Utc::now().year();
     let count: i64 = conn.query_row(
         "SELECT COALESCE(MAX(CAST(SUBSTR(reference, -4) AS INTEGER)), 0) FROM cases WHERE reference LIKE ?",
@@ -758,31 +746,7 @@ pub fn generate_case_reference(conn: &Connection) -> Result<String> {
     Ok(format!("ENQ-{}-{:04}", year, count + 1))
 }
 
-pub async fn generate_case_reference_locked(conn: &tokio::sync::Mutex<Connection>) -> Result<String> {
-    let mut conn = conn.lock().await;
-    let year = Utc::now().year();
-    let count: i64 = conn.query_row(
-        "SELECT COALESCE(MAX(CAST(SUBSTR(reference, -4) AS INTEGER)), 0) FROM cases WHERE reference LIKE ?",
-        params![format!("ENQ-{}-%", year)],
-        |row| row.get(0),
-    )?;
-
-    Ok(format!("ENQ-{}-{:04}", year, count + 1))
-}
-
-pub fn generate_report_reference(conn: &Connection) -> Result<String> {
-    let year = Utc::now().year();
-    let count: i64 = conn.query_row(
-        "SELECT COALESCE(MAX(CAST(SUBSTR(reference, -4) AS INTEGER)), 0) FROM reports WHERE reference LIKE ?",
-        params![format!("RPT-{}-%", year)],
-        |row| row.get(0),
-    )?;
-
-    Ok(format!("RPT-{}-{:04}", year, count + 1))
-}
-
-pub async fn generate_report_reference_locked(conn: &tokio::sync::Mutex<Connection>) -> Result<String> {
-    let mut conn = conn.lock().await;
+pub fn generate_report_reference(conn: &Connection) -> AppResult<String> {
     let year = Utc::now().year();
     let count: i64 = conn.query_row(
         "SELECT COALESCE(MAX(CAST(SUBSTR(reference, -4) AS INTEGER)), 0) FROM reports WHERE reference LIKE ?",
@@ -795,8 +759,4 @@ pub async fn generate_report_reference_locked(conn: &tokio::sync::Mutex<Connecti
 
 pub fn generate_uuid() -> String {
     uuid::Uuid::new_v4().to_string()
-}
-
-pub fn generate_id(prefix: &str) -> String {
-    format!("{}-{}", prefix, uuid::Uuid::new_v4().to_string().split('-').next().unwrap())
 }

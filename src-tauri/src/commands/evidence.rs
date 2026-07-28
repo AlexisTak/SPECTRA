@@ -2,7 +2,7 @@
 //!
 //! Manages evidence items with integrity verification.
 
-use anyhow::Result;
+use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use chrono::Utc;
@@ -53,7 +53,7 @@ pub struct CaseIntegrityReport {
 pub async fn get_evidence(
     state: tauri::State<'_, AppState>,
     case_id: String,
-) -> Result<Vec<Evidence>> {
+) -> AppResult<Vec<Evidence>> {
     let mut conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, caseId, type, nom, description, chemin, hash_sha256, hash_md5, taille, dateAjout, statut, source, sourceUrl, metadata FROM evidence WHERE caseId = ? ORDER BY dateAjout DESC")?;
@@ -115,7 +115,7 @@ pub async fn add_evidence(
     case_id: String,
     data: AddEvidenceInput,
     options: Option<AddEvidenceOptions>,
-) -> Result<Evidence> {
+) -> AppResult<Evidence> {
     let mut conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
 
@@ -126,7 +126,7 @@ pub async fn add_evidence(
         |row| row.get(0),
     )?;
     if case_exists == 0 {
-        return Err(anyhow::anyhow!("Case not found: {}", case_id));
+        return Err(AppError::msg(format!("Case not found: {}", case_id)));
     }
 
     let id = crate::database::generate_uuid();
@@ -163,7 +163,7 @@ pub async fn add_evidence(
     conn.execute(
         "INSERT INTO case_events (id, caseId, type, titre, description, timestamp, actor, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         rusqlite::params![
-            &format!("CE-{}-000001", Utc::now().year()),
+            &crate::database::generate_uuid(),
             &case_id,
             "evidence_added",
             &format!("Evidence added: {}", data.nom.unwrap_or_else(|| "Unknown".to_string())),
@@ -178,7 +178,7 @@ pub async fn add_evidence(
     get_evidence_single(&mut *conn, &id)
 }
 
-fn get_evidence_single(conn: &mut rusqlite::Connection, id: &str) -> Result<Evidence> {
+fn get_evidence_single(conn: &mut rusqlite::Connection, id: &str) -> AppResult<Evidence> {
     let mut stmt = conn.prepare("SELECT id, caseId, type, nom, description, chemin, hash_sha256, hash_md5, taille, dateAjout, statut, source, sourceUrl, metadata FROM evidence WHERE id = ?")?;
 
     let evidence = stmt.query_row(rusqlite::params![id], |row| {
@@ -218,7 +218,7 @@ pub async fn delete_evidence(
     id: String,
     case_id: String,
     options: Option<DeleteEvidenceOptions>,
-) -> Result<()> {
+) -> AppResult<()> {
     let mut conn = state.get_conn().await;
 
     // Check evidence exists
@@ -228,7 +228,7 @@ pub async fn delete_evidence(
         |row| row.get(0),
     )?;
     if exists == 0 {
-        return Err(anyhow::anyhow!("Evidence not found: {}", id));
+        return Err(AppError::msg(format!("Evidence not found: {}", id)));
     }
 
     // Get evidence details before delete
@@ -251,7 +251,7 @@ pub async fn delete_evidence(
     conn.execute(
         "INSERT INTO case_events (id, caseId, type, titre, description, timestamp, actor, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         rusqlite::params![
-            &format!("CE-{}-000001", Utc::now().year()),
+            &crate::database::generate_uuid(),
             &case_id,
             "evidence_deleted",
             &format!("Evidence deleted: {}", evidence.nom.unwrap_or_else(|| "Unknown".to_string())),

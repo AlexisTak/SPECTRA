@@ -2,7 +2,7 @@
 //!
 //! Manages case snapshots with hash verification.
 
-use anyhow::Result;
+use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use crate::database::{generate_uuid, AppState};
@@ -62,7 +62,7 @@ pub struct CreateSnapshotInput {
 pub async fn take_snapshot(
     state: tauri::State<'_, AppState>,
     input: CreateSnapshotInput,
-) -> Result<SnapshotMetadata> {
+) -> AppResult<SnapshotMetadata> {
     let mut conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
     let id = generate_uuid();
@@ -74,7 +74,7 @@ pub async fn take_snapshot(
         |row| row.get(0),
     )?;
     if case_exists == 0 {
-        return Err(anyhow::anyhow!("Case not found: {}", input.case_id));
+        return Err(AppError::msg(format!("Case not found: {}", input.case_id)));
     }
 
     // Get the latest snapshot hash for chaining
@@ -105,7 +105,7 @@ pub async fn take_snapshot(
             &input.description,
             &hash,
             &hash_precedent,
-            &json_str.len() as i64,
+            json_str.len() as i64,
             "NULL",
             &input.metadata,
         ],
@@ -115,7 +115,7 @@ pub async fn take_snapshot(
     conn.execute(
         "INSERT INTO case_events (id, caseId, type, titre, description, timestamp, actor, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         rusqlite::params![
-            &format!("CE-{}-000001", Utc::now().year()),
+            &crate::database::generate_uuid(),
             &input.case_id,
             "snapshot_taken",
             &format!("Snapshot: {}", input.nom),
@@ -145,7 +145,7 @@ pub async fn take_snapshot(
 pub async fn list_snapshots(
     state: tauri::State<'_, AppState>,
     case_id: String,
-) -> Result<Vec<SnapshotMetadata>> {
+) -> AppResult<Vec<SnapshotMetadata>> {
     let mut conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, caseId, nom, description, hashSha256, taille, created_at FROM snapshots WHERE caseId = ? ORDER BY created_at DESC")?;
@@ -174,7 +174,7 @@ pub async fn list_snapshots(
 pub async fn get_snapshot(
     state: tauri::State<'_, AppState>,
     id: String,
-) -> Result<Option<Snapshot>> {
+) -> AppResult<Option<Snapshot>> {
     let mut conn = state.get_conn().await;
 
     // Get snapshot metadata
@@ -237,12 +237,12 @@ pub async fn get_snapshot(
 pub async fn verify_snapshot_integrity(
     state: tauri::State<'_, AppState>,
     id: String,
-) -> Result<serde_json::Value> {
+) -> AppResult<serde_json::Value> {
     let mut conn = state.get_conn().await;
 
     // Get snapshot
     let mut stmt = conn.prepare("SELECT hashSha256, hashPrecedent FROM snapshots WHERE id = ?")?;
-    let (hash, hash_precedent) = stmt.query_row(rusqlite::params![id], |row| {
+    let (hash, hash_precedent): (String, Option<String>) = stmt.query_row(rusqlite::params![id], |row| {
         Ok((row.get(0)?, row.get(1)?))
     })?;
 
@@ -271,7 +271,7 @@ pub async fn verify_snapshot_integrity(
 pub async fn delete_snapshot(
     state: tauri::State<'_, AppState>,
     id: String,
-) -> Result<()> {
+) -> AppResult<()> {
     let mut conn = state.get_conn().await;
 
     // Check snapshot exists
@@ -281,7 +281,7 @@ pub async fn delete_snapshot(
         |row| row.get(0),
     )?;
     if exists == 0 {
-        return Err(anyhow::anyhow!("Snapshot not found: {}", id));
+        return Err(AppError::msg(format!("Snapshot not found: {}", id)));
     }
 
     // Delete contents first
@@ -307,9 +307,9 @@ pub async fn delete_snapshot(
 pub async fn load_snapshot_bundle(
     state: tauri::State<'_, AppState>,
     id: String,
-) -> Result<Option<serde_json::Value>> {
-    let mut conn = state.get_conn().await;
-
+) -> AppResult<Option<serde_json::Value>> {
+    // Ne pas prendre le verrou ici : `get_snapshot` le prend lui-même, et ce
+    // mutex n.est pas réentrant (`audit.md`, P2-8).
     let snapshot = get_snapshot(state, id).await?;
 
     Ok(snapshot.map(|s| {

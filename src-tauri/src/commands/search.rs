@@ -2,7 +2,7 @@
 //!
 //! Provides full-text search using FTS5.
 
-use anyhow::Result;
+use crate::error::AppResult;
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use crate::database::AppState;
@@ -34,7 +34,7 @@ pub async fn search_action(
     query: String,
     kinds: Option<Vec<String>>,
     case_id: Option<String>,
-) -> Result<Vec<SearchHit>> {
+) -> AppResult<Vec<SearchHit>> {
     let mut conn = state.get_conn().await;
     let opts = kinds.unwrap_or_default();
 
@@ -88,7 +88,7 @@ fn search_fts_table(
     content_table: &str,
     query: &str,
     case_id: Option<String>,
-) -> Result<Vec<SearchHit>> {
+) -> AppResult<Vec<SearchHit>> {
     // Use FTS5 MATCH query
     let mut stmt = conn.prepare(&format!(
         "SELECT rowid, nom, description FROM {} WHERE {} MATCH ? ORDER BY rank",
@@ -108,9 +108,12 @@ fn search_fts_table(
             |row| row.get(0),
         ).ok();
 
-        // Skip if case_id filter is set and doesn't match
-        if let Some(ref cid) = case_id {
-            if &cid != cid.as_ref().map_or("", |c| c) {
+        // Filtre par dossier. La version d'origine comparait une variable à
+        // elle-même (masquage de nom) : le filtre n'avait aucun effet et la
+        // recherche « dans ce dossier » renvoyait tous les dossiers
+        // (`audit.md`, P2-4).
+        if let Some(wanted) = &case_id {
+            if cid.as_deref() != Some(wanted.as_str()) {
                 continue;
             }
         }
@@ -133,7 +136,7 @@ fn search_fts_table(
 // =============================================================================
 
 #[command]
-pub async fn reindex_all(state: tauri::State<'_, AppState>) -> Result<()> {
+pub async fn reindex_all(state: tauri::State<'_, AppState>) -> AppResult<()> {
     let mut conn = state.get_conn().await;
 
     // Rebuild FTS indexes

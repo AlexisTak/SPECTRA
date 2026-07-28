@@ -2,7 +2,7 @@
 //!
 //! Manages subjects (suspects, victims, witnesses).
 
-use anyhow::Result;
+use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use crate::database::{generate_uuid, AppState};
@@ -64,12 +64,12 @@ pub struct UpdateSubjectInput {
 pub async fn get_subjects(
     state: tauri::State<'_, AppState>,
     case_id: String,
-) -> Result<Vec<Subject>> {
+) -> AppResult<Vec<Subject>> {
     let mut conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, caseId, nom, prenom, statut, dateNaissance, lieuNaissance, nationalite, telephone, email, adresse, description, metadata FROM subjects WHERE caseId = ? ORDER BY nom")?;
 
-    let subjects = conn.query_map(rusqlite::params![case_id], |row| {
+    let subjects = stmt.query_map(rusqlite::params![case_id], |row| {
         Ok(Subject {
             id: row.get(0)?,
             case_id: row.get(1)?,
@@ -105,7 +105,7 @@ pub async fn create_subject(
     state: tauri::State<'_, AppState>,
     data: CreateSubjectInput,
     options: Option<CreateSubjectOptions>,
-) -> Result<Subject> {
+) -> AppResult<Subject> {
     let mut conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
 
@@ -116,10 +116,15 @@ pub async fn create_subject(
         |row| row.get(0),
     )?;
     if case_exists == 0 {
-        return Err(anyhow::anyhow!("Case not found: {}", data.case_id));
+        return Err(AppError::msg(format!("Case not found: {}", data.case_id)));
     }
 
     let id = generate_uuid();
+    // Lié une fois : `data.statut` était consommé deux fois (`audit.md`, P0-1j).
+    let statut = data
+        .statut
+        .clone()
+        .unwrap_or_else(|| "suspect".to_string());
 
     conn.execute(
         "INSERT INTO subjects (id, caseId, nom, prenom, statut, dateNaissance, lieuNaissance, nationalite, telephone, email, adresse, description, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -128,7 +133,7 @@ pub async fn create_subject(
             &data.case_id,
             &data.nom,
             &data.prenom,
-            &data.statut.unwrap_or_else(|| "suspect".to_string()),
+            &statut,
             &data.date_naissance,
             &data.lieu_naissance,
             &data.nationalite,
@@ -152,11 +157,11 @@ pub async fn create_subject(
     conn.execute(
         "INSERT INTO case_events (id, caseId, type, titre, description, timestamp, actor, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         rusqlite::params![
-            &format!("CE-{}-000001", Utc::now().year()),
+            &crate::database::generate_uuid(),
             &data.case_id,
             "subject_added",
             &format!("Subject added: {}", data.nom.unwrap_or_else(|| "Unknown".to_string())),
-            &format!("Added subject with status {}", data.statut.unwrap_or_else(|| "suspect".to_string())),
+            &format!("Added subject with status {}", statut),
             &now,
             &options.as_ref().and_then(|o| o.actor.clone()),
             &serde_json::to_string(&options)?,
@@ -167,7 +172,7 @@ pub async fn create_subject(
     get_subject_single(&mut *conn, &id)
 }
 
-fn get_subject_single(conn: &mut rusqlite::Connection, id: &str) -> Result<Subject> {
+fn get_subject_single(conn: &mut rusqlite::Connection, id: &str) -> AppResult<Subject> {
     let mut stmt = conn.prepare("SELECT id, caseId, nom, prenom, statut, dateNaissance, lieuNaissance, nationalite, telephone, email, adresse, description, metadata FROM subjects WHERE id = ?")?;
 
     let subject = stmt.query_row(rusqlite::params![id], |row| {
@@ -206,7 +211,7 @@ pub async fn update_subject(
     id: String,
     data: UpdateSubjectInput,
     options: Option<UpdateSubjectOptions>,
-) -> Result<Subject> {
+) -> AppResult<Subject> {
     let mut conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
 
@@ -217,7 +222,7 @@ pub async fn update_subject(
         |row| row.get(0),
     )?;
     if exists == 0 {
-        return Err(anyhow::anyhow!("Subject not found: {}", id));
+        return Err(AppError::msg(format!("Subject not found: {}", id)));
     }
 
     // Get case_id before update
@@ -282,7 +287,7 @@ pub async fn update_subject(
     params.push(&id);
 
     let query = format!("UPDATE subjects SET {} WHERE id = ?", updates.join(", "));
-    conn.execute(&query, params)?;
+    conn.execute(&query, &params[..])?;
 
     // Update FTS index
     if let Some(nom) = &data.nom {
@@ -311,7 +316,7 @@ pub async fn delete_subject(
     id: String,
     case_id: String,
     options: Option<DeleteSubjectOptions>,
-) -> Result<()> {
+) -> AppResult<()> {
     let mut conn = state.get_conn().await;
 
     // Check subject exists
@@ -321,7 +326,7 @@ pub async fn delete_subject(
         |row| row.get(0),
     )?;
     if exists == 0 {
-        return Err(anyhow::anyhow!("Subject not found: {}", id));
+        return Err(AppError::msg(format!("Subject not found: {}", id)));
     }
 
     // Get subject details before delete
@@ -344,7 +349,7 @@ pub async fn delete_subject(
     conn.execute(
         "INSERT INTO case_events (id, caseId, type, titre, description, timestamp, actor, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         rusqlite::params![
-            &format!("CE-{}-000001", Utc::now().year()),
+            &crate::database::generate_uuid(),
             &case_id,
             "subject_deleted",
             &format!("Subject deleted: {}", subject.nom.unwrap_or_else(|| "Unknown".to_string())),

@@ -2,7 +2,7 @@
 //!
 //! Manages case events and notes.
 
-use anyhow::Result;
+use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use crate::database::{generate_uuid, AppState};
@@ -28,7 +28,7 @@ pub struct CaseEvent {
 pub async fn get_events(
     state: tauri::State<'_, AppState>,
     case_id: String,
-) -> Result<Vec<CaseEvent>> {
+) -> AppResult<Vec<CaseEvent>> {
     let mut conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, caseId, type, titre, description, timestamp, actor, metadata FROM case_events WHERE caseId = ? ORDER BY timestamp DESC")?;
@@ -59,7 +59,7 @@ pub async fn add_note(
     state: tauri::State<'_, AppState>,
     case_id: String,
     description: String,
-) -> Result<CaseEvent> {
+) -> AppResult<CaseEvent> {
     let mut conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
     let id = generate_uuid();
@@ -71,7 +71,7 @@ pub async fn add_note(
         |row| row.get(0),
     )?;
     if case_exists == 0 {
-        return Err(anyhow::anyhow!("Case not found: {}", case_id));
+        return Err(AppError::msg(format!("Case not found: {}", case_id)));
     }
 
     conn.execute(

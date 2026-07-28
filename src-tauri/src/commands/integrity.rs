@@ -2,7 +2,7 @@
 //!
 //! Manages evidence integrity verification.
 
-use anyhow::Result;
+use crate::error::AppResult;
 use tauri::command;
 use crate::database::{generate_uuid, AppState};
 use chrono::Utc;
@@ -18,7 +18,7 @@ pub use crate::commands::evidence::{IntegrityCheck, CaseIntegrityReport};
 pub async fn verify_evidence(
     state: tauri::State<'_, AppState>,
     evidence_id: String,
-) -> Result<IntegrityCheck> {
+) -> AppResult<IntegrityCheck> {
     let mut conn = state.get_conn().await;
 
     // Get evidence with hash
@@ -47,7 +47,7 @@ pub async fn verify_evidence(
 pub async fn verify_case_evidence(
     state: tauri::State<'_, AppState>,
     case_id: String,
-) -> Result<CaseIntegrityReport> {
+) -> AppResult<CaseIntegrityReport> {
     let mut conn = state.get_conn().await;
 
     // Get total evidence count

@@ -1,56 +1,38 @@
-//! Cekarna - Desktop OSINT application for case investigations
+//! Cekarna — application de bureau d'enquêtes OSINT.
 //!
-//! Main entry point and command registration.
+//! Point d'entrée et enregistrement des commandes Tauri.
+//!
+//! Le shell applicatif reste celui de Cekarna ; les briques de domaine SPECTRA
+//! (`spectra-core`, `spectra-store`, `spectra-audit`) sont introduites
+//! progressivement par les crates du workspace.
+
+mod commands;
+mod database;
+mod error;
+
+pub use database::AppState;
+pub use error::{AppError, AppResult};
 
 use tauri::Manager;
 
-mod database;
-mod commands;
-
-pub use database::AppState;
-
-/// Application configuration
-pub const APP_CONFIG: &str = r#"
-{
-  "app_name": "Cekarna",
-  "version": "0.1.0",
-  "data_dir": ".cekarna",
-  "max_evidence_size_mb": 100,
-  "hash_algorithm": "sha256",
-  "audit_enabled": true
-}
-"#;
-
-
-// =============================================================================
-// MAIN - Command registration and app startup
-// =============================================================================
-
-fn main() {
-    // Initialize database first (to check path and create tables)
-    let database_path = std::path::Path::new("casetrack.db");
-    let conn = database::init_database(database_path)
-        .map_err(|e| format!("Failed to initialize database: {}", e))
-        .expect("Failed to initialize database");
-
+/// Démarre l'application.
+///
+/// La base est ouverte dans le répertoire de données applicatives fourni par
+/// Tauri, et non dans le répertoire courant : deux lancements depuis des
+/// répertoires différents doivent voir le même dossier d'enquête
+/// (voir `audit.md`, P1-10).
+pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // Store the connection in app state by replacing the default one
-            // We need to use State::inner() to get mutable access
-            let mut state = app.state::<AppState>();
-            state.inner().set_connection(conn);
-
-            // Initialize CLI arguments if any
-            let args: Vec<String> = std::env::args().collect();
-            if !args.is_empty() {
-                eprintln!("Application started with args: {:?}", &args[1..]);
-            }
-
+            let data_dir = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&data_dir)?;
+            let conn = database::init_database(&data_dir.join("casetrack.db"))?;
+            app.manage(AppState::new(conn));
             Ok(())
         })
-        .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
-            // Re-exported commands from commands module
             commands::get_cases,
             commands::get_case,
             commands::get_case_stats,
@@ -95,6 +77,6 @@ fn main() {
             commands::add_report_timeline_event,
             commands::get_report_timeline,
         ])
-        .run()
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!())
+        .expect("erreur au démarrage de l'application Tauri");
 }

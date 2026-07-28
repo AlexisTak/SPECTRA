@@ -2,7 +2,7 @@
 //!
 //! Provides CRUD operations for case management.
 
-use anyhow::Result;
+use crate::error::{AppError, AppResult};
 use chrono::Datelike;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
@@ -55,30 +55,37 @@ pub async fn get_cases(
     state: tauri::State<'_, AppState>,
     statut: Option<String>,
     search: Option<String>,
-) -> Result<Vec<Case>> {
+) -> AppResult<Vec<Case>> {
     let conn = state.get_conn().await;
 
-    let query = if search.is_some() {
-        "SELECT id, reference, titre, description, statut, priorite, categorie, dateCreation, dateMiseJour, tags, meta FROM cases WHERE statut = ? AND (reference LIKE '%' || ? || '%' OR titre LIKE '%' || ? || '%' OR description LIKE '%' || ? || '%')"
-    } else if statut.is_some() {
-        "SELECT id, reference, titre, description, statut, priorite, categorie, dateCreation, dateMiseJour, tags, meta FROM cases WHERE statut = ?"
-    } else {
-        "SELECT id, reference, titre, description, statut, priorite, categorie, dateCreation, dateMiseJour, tags, meta FROM cases"
-    };
+    // Les filtres sont indépendants : une recherche sans filtre de statut ne
+    // doit pas retomber implicitement sur `statut = 'ouvert'`, ce qui rendait
+    // les dossiers clos introuvables (`audit.md`, P2-6).
+    let mut query = String::from(
+        "SELECT id, reference, titre, description, statut, priorite, categorie, dateCreation, dateMiseJour, tags, meta FROM cases",
+    );
+    let mut clauses: Vec<&str> = Vec::new();
+    let mut params: Vec<&dyn rusqlite::ToSql> = Vec::new();
 
-    let statut_val = statut.as_ref().map(|s| s.as_str()).unwrap_or("ouvert");
-    let search_val = search.as_ref().map(|s| s.as_str()).unwrap_or("");
+    if let Some(statut) = &statut {
+        clauses.push("statut = ?");
+        params.push(statut);
+    }
+    if let Some(search) = &search {
+        clauses.push(
+            "(reference LIKE '%' || ? || '%' OR titre LIKE '%' || ? || '%' OR description LIKE '%' || ? || '%')",
+        );
+        params.push(search);
+        params.push(search);
+        params.push(search);
+    }
+    if !clauses.is_empty() {
+        query.push_str(" WHERE ");
+        query.push_str(&clauses.join(" AND "));
+    }
 
-    let params = if search.is_some() {
-        [&statut_val, &search_val, &search_val, &search_val] as _
-    } else if statut.is_some() {
-        [&statut_val] as _
-    } else {
-        &[] as _
-    };
-
-    let mut stmt = conn.prepare(query)?;
-    let cases = stmt.query_map(params, |row| {
+    let mut stmt = conn.prepare(&query)?;
+    let cases = stmt.query_map(&params[..], |row| {
         Ok(Case {
             id: row.get(0)?,
             reference: row.get(1)?,
@@ -106,7 +113,7 @@ pub async fn get_cases(
 pub async fn get_case(
     state: tauri::State<'_, AppState>,
     id: String,
-) -> Result<Option<Case>> {
+) -> AppResult<Option<Case>> {
     let conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, reference, titre, description, statut, priorite, categorie, dateCreation, dateMiseJour, tags, meta FROM cases WHERE id = ?")?;
@@ -134,22 +141,22 @@ pub async fn get_case(
 // =============================================================================
 
 #[command]
-pub async fn get_case_stats(state: tauri::State<'_, AppState>) -> Result<serde_json::Value> {
+pub async fn get_case_stats(state: tauri::State<'_, AppState>) -> AppResult<serde_json::Value> {
     let conn = state.get_conn().await;
 
     let mut stats = serde_json::Map::new();
 
-    let statut_counts: Vec<(String, i64)> = (*conn).query_map(
-        "SELECT statut, COUNT(*) FROM cases GROUP BY statut",
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    )?.collect::<Result<_, _>>()?;
+    let statut_counts: Vec<(String, i64)> = conn
+        .prepare("SELECT statut, COUNT(*) FROM cases GROUP BY statut")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<_, _>>()?;
 
     stats.insert("byStatus".to_string(), serde_json::to_value(statut_counts)?);
 
-    let priorite_counts: Vec<(String, i64)> = (*conn).query_map(
-        "SELECT priorite, COUNT(*) FROM cases GROUP BY priorite",
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    )?.collect::<Result<_, _>>()?;
+    let priorite_counts: Vec<(String, i64)> = conn
+        .prepare("SELECT priorite, COUNT(*) FROM cases GROUP BY priorite")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<_, _>>()?;
 
     stats.insert("byPriority".to_string(), serde_json::to_value(priorite_counts)?);
 
@@ -164,13 +171,14 @@ pub async fn get_case_stats(state: tauri::State<'_, AppState>) -> Result<serde_j
 pub async fn create_case(
     state: tauri::State<'_, AppState>,
     data: CreateCaseInput,
-) -> Result<Case> {
+) -> AppResult<Case> {
     let conn = state.get_conn().await;
     let now = chrono::Utc::now().to_rfc3339();
 
     let id = crate::database::generate_uuid();
-    let reference = crate::database::generate_case_reference_locked(&state.conn).await?;
-    let year = chrono::Utc::now().year();
+    // Le verrou est déjà détenu par `conn` : reprendre le mutex ici provoquait
+    // un interblocage (`audit.md`, P2-8). On réutilise la connexion verrouillée.
+    let reference = crate::database::generate_case_reference(&conn)?;
 
     conn.execute(
         "INSERT INTO cases (id, reference, titre, description, statut, priorite, categorie, dateCreation, dateMiseJour, tags, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -199,7 +207,7 @@ pub async fn create_case(
     conn.execute(
         "INSERT INTO audit_events (id, caseId, action, entityKind, entityId, imma, imma_precedent, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         rusqlite::params![
-            &format!("AE-{}-000001", year),
+            &crate::database::generate_uuid(),
             &id,
             "create",
             "case",
@@ -210,7 +218,10 @@ pub async fn create_case(
         ],
     )?;
 
-    get_case(state, id).map(|c| c.ok_or_else(|| anyhow::anyhow!("Failed to retrieve created case")))
+    drop(conn);
+    get_case(state, id)
+        .await?
+        .ok_or_else(|| AppError::msg("dossier introuvable après création"))
 }
 
 // =============================================================================
@@ -222,8 +233,19 @@ pub async fn update_case(
     state: tauri::State<'_, AppState>,
     id: String,
     data: UpdateCaseInput,
-) -> Result<Case> {
+) -> AppResult<Case> {
     let conn = state.get_conn().await;
+
+    // Bloc explicite : `Vec<&dyn ToSql>` n'est pas `Sync`, il ne doit donc pas
+    // rester vivant au moment du `.await` final, sinon le futur de la commande
+    // n'est plus `Send`.
+    //
+    // Les valeurs dérivées sont liées ici : les pousser directement dans
+    // `params` créait des temporaires libérés avant l'exécution de la requête
+    // (`audit.md`, P0-1g).
+    {
+    let tags_json = data.tags.as_ref().map(serde_json::to_string).transpose()?;
+    let now = chrono::Utc::now().to_rfc3339();
 
     let mut updates = Vec::new();
     let mut params: Vec<&dyn rusqlite::ToSql> = Vec::new();
@@ -248,9 +270,9 @@ pub async fn update_case(
         updates.push("categorie = ?");
         params.push(categorie);
     }
-    if let Some(tags) = &data.tags {
+    if let Some(tags_json) = &tags_json {
         updates.push("tags = ?");
-        params.push(&serde_json::to_string(tags)?);
+        params.push(tags_json);
     }
     if let Some(meta) = &data.meta {
         updates.push("meta = ?");
@@ -258,12 +280,12 @@ pub async fn update_case(
     }
 
     updates.push("dateMiseJour = ?");
-    params.push(&chrono::Utc::now().to_rfc3339());
+    params.push(&now);
 
     params.push(&id);
 
     let query = format!("UPDATE cases SET {} WHERE id = ?", updates.join(", "));
-    conn.execute(&query, params)?;
+    conn.execute(&query, &params[..])?;
 
     // Update FTS index
     if let Some(titre) = &data.titre {
@@ -272,8 +294,12 @@ pub async fn update_case(
             rusqlite::params![titre, &id],
         )?;
     }
+    }
 
-    get_case(state, id).map(|c| c.ok_or_else(|| anyhow::anyhow!("Failed to retrieve updated case")))
+    drop(conn);
+    get_case(state, id)
+        .await?
+        .ok_or_else(|| AppError::msg("dossier introuvable après mise à jour"))
 }
 
 // =============================================================================
@@ -284,7 +310,7 @@ pub async fn update_case(
 pub async fn delete_case(
     state: tauri::State<'_, AppState>,
     id: String,
-) -> Result<()> {
+) -> AppResult<()> {
     let conn = state.get_conn().await;
 
     conn.execute(

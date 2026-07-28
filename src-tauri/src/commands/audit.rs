@@ -2,7 +2,7 @@
 //!
 //! Manages audit trail and integrity verification.
 
-use anyhow::Result;
+use crate::error::AppResult;
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use crate::database::{generate_uuid, AppState};
@@ -39,7 +39,7 @@ pub struct AuditTrailVerification {
 pub async fn verify_audit_trail(
     state: tauri::State<'_, AppState>,
     case_id: String,
-) -> Result<AuditTrailVerification> {
+) -> AppResult<AuditTrailVerification> {
     let mut conn = state.get_conn().await;
 
     // Get all audit events for case
@@ -106,7 +106,7 @@ pub async fn verify_audit_trail(
 // LIST AUDIT
 // =============================================================================
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ListAuditOptions {
     pub limit: Option<i64>,
     pub action: Option<String>,
@@ -118,7 +118,7 @@ pub async fn list_audit(
     state: tauri::State<'_, AppState>,
     case_id: String,
     options: Option<ListAuditOptions>,
-) -> Result<Vec<AuditEvent>> {
+) -> AppResult<Vec<AuditEvent>> {
     let mut conn = state.get_conn().await;
     let opts = options.unwrap_or_default();
 
@@ -141,7 +141,7 @@ pub async fn list_audit(
     }
 
     let mut stmt = conn.prepare(&query)?;
-    let events = stmt.query_map(params, |row| {
+    let events = stmt.query_map(&params[..], |row| {
         Ok(AuditEvent {
             id: row.get(0)?,
             case_id: row.get(1)?,
@@ -175,7 +175,7 @@ pub struct LogAccessInput {
 pub async fn log_access(
     state: tauri::State<'_, AppState>,
     input: LogAccessInput,
-) -> Result<()> {
+) -> AppResult<()> {
     let mut conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
     let id = generate_uuid();

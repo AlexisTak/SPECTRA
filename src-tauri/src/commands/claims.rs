@@ -2,7 +2,7 @@
 //!
 //! Manages claims about evidence and subjects.
 
-use anyhow::Result;
+use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use crate::database::{generate_uuid, AppState};
@@ -42,8 +42,11 @@ pub struct SetClaimInput {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ClaimStats {
     pub total: i64,
-    pub by_qualification: serde_json::Map<String, i64>,
-    pub by_source: serde_json::Map<String, i64>,
+    // `serde_json::Map` est toujours `Map<String, Value>` : le paramétrer avec
+    // `i64` ne compile pas. Un `HashMap` sérialise en objet JSON de la même
+    // façon (`audit.md`, P0-1d).
+    pub by_qualification: std::collections::HashMap<String, i64>,
+    pub by_source: std::collections::HashMap<String, i64>,
 }
 
 // =============================================================================
@@ -54,19 +57,19 @@ pub struct ClaimStats {
 pub async fn set_claim(
     state: tauri::State<'_, AppState>,
     input: SetClaimInput,
-) -> Result<Claim> {
+) -> AppResult<Claim> {
     let mut conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
     let id = generate_uuid();
 
     // Validate qualification
     if !["preuve", "indice", "hypothese", "non_verifie"].contains(&input.qualification.as_str()) {
-        return Err(anyhow::anyhow!("Invalid qualification: {}", input.qualification));
+        return Err(AppError::msg(format!("Invalid qualification: {}", input.qualification)));
     }
 
     // Validate fiabilite
     if input.fiabilite < 0 || input.fiabilite > 5 {
-        return Err(anyhow::anyhow!("Fiabilite must be between 0 and 5"));
+        return Err(AppError::msg(format!("Fiabilite must be between 0 and 5")));
     }
 
     // Check if claim already exists for this ref
@@ -119,7 +122,7 @@ pub async fn set_claim(
     get_claim_single(&mut *conn, &input.ref_kind, &input.ref_id)
 }
 
-fn get_claim_single(conn: &mut rusqlite::Connection, ref_kind: &str, ref_id: &str) -> Result<Claim> {
+fn get_claim_single(conn: &mut rusqlite::Connection, ref_kind: &str, ref_id: &str) -> AppResult<Claim> {
     let mut stmt = conn.prepare("SELECT id, caseId, refKind, refId, qualification, fiabilite, source, sourceUrl, takenBy, notes, datePreuve, metadata FROM claims WHERE refKind = ? AND refId = ?")?;
 
     let claim = stmt.query_row(rusqlite::params![ref_kind, ref_id], |row| {
@@ -150,7 +153,7 @@ fn get_claim_single(conn: &mut rusqlite::Connection, ref_kind: &str, ref_id: &st
 pub async fn list_claims(
     state: tauri::State<'_, AppState>,
     case_id: String,
-) -> Result<Vec<Claim>> {
+) -> AppResult<Vec<Claim>> {
     let mut conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, caseId, refKind, refId, qualification, fiabilite, source, sourceUrl, takenBy, notes, datePreuve, metadata FROM claims WHERE caseId = ? ORDER BY fiabilite DESC")?;
@@ -185,7 +188,7 @@ pub async fn get_claim(
     state: tauri::State<'_, AppState>,
     ref_kind: String,
     ref_id: String,
-) -> Result<Option<Claim>> {
+) -> AppResult<Option<Claim>> {
     let mut conn = state.get_conn().await;
 
     let claim = get_claim_single(&mut *conn, &ref_kind, &ref_id).ok();
@@ -202,7 +205,7 @@ pub async fn delete_claim(
     state: tauri::State<'_, AppState>,
     id: String,
     case_id: String,
-) -> Result<()> {
+) -> AppResult<()> {
     let mut conn = state.get_conn().await;
 
     // Delete claim
@@ -216,7 +219,7 @@ pub async fn delete_claim(
     conn.execute(
         "INSERT INTO case_events (id, caseId, type, titre, description, timestamp, actor, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         rusqlite::params![
-            &format!("CE-{}-000001", Utc::now().year()),
+            &crate::database::generate_uuid(),
             &case_id,
             "claim_deleted",
             "Claim deleted",
@@ -238,7 +241,7 @@ pub async fn delete_claim(
 pub async fn get_claim_stats(
     state: tauri::State<'_, AppState>,
     case_id: String,
-) -> Result<ClaimStats> {
+) -> AppResult<ClaimStats> {
     let mut conn = state.get_conn().await;
 
     let total: i64 = conn.query_row(
@@ -248,28 +251,22 @@ pub async fn get_claim_stats(
     )?;
 
     // Count by qualification
-    let by_qualification: Vec<(String, i64)> = conn.query_map(
-        "SELECT qualification, COUNT(*) FROM claims WHERE caseId = ? GROUP BY qualification",
-        rusqlite::params![case_id],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    )?.collect::<Result<_, _>>()?;
-
-    let mut by_qual_map = serde_json::Map::new();
-    for (qual, count) in by_qualification {
-        by_qual_map.insert(qual, count);
-    }
+    let by_qual_map: std::collections::HashMap<String, i64> = conn
+        .prepare(
+            "SELECT qualification, COUNT(*) FROM claims WHERE caseId = ? GROUP BY qualification",
+        )?
+        .query_map(rusqlite::params![case_id], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?
+        .collect::<Result<_, _>>()?;
 
     // Count by source
-    let by_source: Vec<(String, i64)> = conn.query_map(
-        "SELECT source, COUNT(*) FROM claims WHERE caseId = ? GROUP BY source",
-        rusqlite::params![case_id],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    )?.collect::<Result<_, _>>()?;
-
-    let mut by_source_map = serde_json::Map::new();
-    for (src, count) in by_source {
-        by_source_map.insert(src, count);
-    }
+    let by_source_map: std::collections::HashMap<String, i64> = conn
+        .prepare("SELECT source, COUNT(*) FROM claims WHERE caseId = ? GROUP BY source")?
+        .query_map(rusqlite::params![case_id], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?
+        .collect::<Result<_, _>>()?;
 
     Ok(ClaimStats {
         total,

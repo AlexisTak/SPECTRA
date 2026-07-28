@@ -2,7 +2,7 @@
 //!
 //! Manages reports with timeline and content.
 
-use anyhow::Result;
+use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use crate::database::{generate_report_reference, generate_uuid, AppState};
@@ -66,8 +66,9 @@ pub struct ReportTimelineEvent {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ReportStats {
     pub total: i64,
-    pub by_status: serde_json::Map<String, i64>,
-    pub by_case: serde_json::Map<String, i64>,
+    // Voir `ClaimStats` : `serde_json::Map` n'est pas générique sur la valeur.
+    pub by_status: std::collections::HashMap<String, i64>,
+    pub by_case: std::collections::HashMap<String, i64>,
 }
 
 // =============================================================================
@@ -78,7 +79,7 @@ pub struct ReportStats {
 pub async fn get_reports(
     state: tauri::State<'_, AppState>,
     case_id: Option<String>,
-) -> Result<Vec<Report>> {
+) -> AppResult<Vec<Report>> {
     let mut conn = state.get_conn().await;
 
     let query = if let Some(ref cid) = case_id {
@@ -94,7 +95,7 @@ pub async fn get_reports(
     };
 
     let mut stmt = conn.prepare(query)?;
-    let reports = stmt.query_map(params, |row| {
+    let reports = stmt.query_map(&params[..], |row| {
         Ok(Report {
             id: row.get(0)?,
             reference: row.get(1)?,
@@ -122,7 +123,7 @@ pub async fn get_reports(
 pub async fn get_report(
     state: tauri::State<'_, AppState>,
     id: String,
-) -> Result<Option<Report>> {
+) -> AppResult<Option<Report>> {
     let mut conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, reference, caseId, titre, description, statut, dateCreation, dateEcheance, dateCloture, auteur, metadata FROM reports WHERE id = ?")?;
@@ -154,7 +155,7 @@ pub async fn get_report(
 pub async fn create_report(
     state: tauri::State<'_, AppState>,
     data: CreateReportInput,
-) -> Result<Report> {
+) -> AppResult<Report> {
     let mut conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
     let id = generate_uuid();
@@ -167,7 +168,7 @@ pub async fn create_report(
         |row| row.get(0),
     )?;
     if case_exists == 0 {
-        return Err(anyhow::anyhow!("Case not found: {}", data.case_id));
+        return Err(AppError::msg(format!("Case not found: {}", data.case_id)));
     }
 
     conn.execute(
@@ -194,7 +195,10 @@ pub async fn create_report(
     )?;
 
     // Re-fetch to get full record
-    get_report(state, id).await.map(|r| r.ok_or_else(|| anyhow::anyhow!("Failed to retrieve created report")))
+    drop(conn);
+    get_report(state, id)
+        .await?
+        .ok_or_else(|| AppError::msg("rapport introuvable après création"))
 }
 
 // =============================================================================
@@ -206,8 +210,14 @@ pub async fn update_report(
     state: tauri::State<'_, AppState>,
     id: String,
     data: UpdateReportInput,
-) -> Result<Report> {
+) -> AppResult<Report> {
     let mut conn = state.get_conn().await;
+
+    // Bloc explicite : `Vec<&dyn ToSql>` n'est pas `Sync` et ne doit pas rester
+    // vivant au moment du `.await` final (le futur de la commande doit être
+    // `Send`).
+    {
+    let now = Utc::now().to_rfc3339();
 
     // Build dynamic UPDATE
     let mut updates = Vec::new();
@@ -234,13 +244,15 @@ pub async fn update_report(
         params.push(metadata);
     }
 
-    updates.push("dateMiseJour = ?");
-    params.push(&Utc::now().to_rfc3339());
+    // La table `reports` n'a pas de colonne `dateMiseJour` : toute mise à jour
+    // échouait sur `no such column` (`audit.md`, P2-5).
+    updates.push("updated_at = ?");
+    params.push(&now);
 
     params.push(&id);
 
     let query = format!("UPDATE reports SET {} WHERE id = ?", updates.join(", "));
-    conn.execute(&query, params)?;
+    conn.execute(&query, &params[..])?;
 
     // Update FTS index
     if let Some(titre) = &data.titre {
@@ -249,9 +261,13 @@ pub async fn update_report(
             rusqlite::params![titre, &id],
         )?;
     }
+    }
 
     // Re-fetch to get full record
-    get_report(state, id).await.map(|r| r.ok_or_else(|| anyhow::anyhow!("Failed to retrieve updated report")))
+    drop(conn);
+    get_report(state, id)
+        .await?
+        .ok_or_else(|| AppError::msg("rapport introuvable après mise à jour"))
 }
 
 // =============================================================================
@@ -262,7 +278,7 @@ pub async fn update_report(
 pub async fn delete_report(
     state: tauri::State<'_, AppState>,
     id: String,
-) -> Result<()> {
+) -> AppResult<()> {
     let mut conn = state.get_conn().await;
 
     // Remove from FTS index
@@ -297,7 +313,7 @@ pub async fn delete_report(
 // =============================================================================
 
 #[command]
-pub async fn get_report_stats(state: tauri::State<'_, AppState>) -> Result<ReportStats> {
+pub async fn get_report_stats(state: tauri::State<'_, AppState>) -> AppResult<ReportStats> {
     let mut conn = state.get_conn().await;
 
     let total: i64 = conn.query_row(
@@ -307,26 +323,16 @@ pub async fn get_report_stats(state: tauri::State<'_, AppState>) -> Result<Repor
     )?;
 
     // Count by status
-    let by_status: Vec<(String, i64)> = conn.query_map(
-        "SELECT statut, COUNT(*) FROM reports GROUP BY statut",
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    )?.collect::<Result<_, _>>()?;
-
-    let mut by_status_map = serde_json::Map::new();
-    for (statut, count) in by_status {
-        by_status_map.insert(statut, count);
-    }
+    let by_status_map: std::collections::HashMap<String, i64> = conn
+        .prepare("SELECT statut, COUNT(*) FROM reports GROUP BY statut")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<_, _>>()?;
 
     // Count by case
-    let by_case: Vec<(String, i64)> = conn.query_map(
-        "SELECT caseId, COUNT(*) FROM reports GROUP BY caseId",
-        |row| Ok((row.get(0)?, row.get(1)?)),
-    )?.collect::<Result<_, _>>()?;
-
-    let mut by_case_map = serde_json::Map::new();
-    for (cid, count) in by_case {
-        by_case_map.insert(cid, count);
-    }
+    let by_case_map: std::collections::HashMap<String, i64> = conn
+        .prepare("SELECT caseId, COUNT(*) FROM reports GROUP BY caseId")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<_, _>>()?;
 
     Ok(ReportStats {
         total,
@@ -346,7 +352,7 @@ pub async fn add_report_content(
     section: String,
     contenu: String,
     ordre: Option<i32>,
-) -> Result<ReportContent> {
+) -> AppResult<ReportContent> {
     let mut conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
     let id = generate_uuid();
@@ -358,7 +364,7 @@ pub async fn add_report_content(
         |row| row.get(0),
     )?;
     if exists == 0 {
-        return Err(anyhow::anyhow!("Report not found: {}", report_id));
+        return Err(AppError::msg(format!("Report not found: {}", report_id)));
     }
 
     let ordre = ordre.unwrap_or_else(|| {
@@ -406,7 +412,7 @@ pub async fn add_report_content(
 pub async fn get_report_contents(
     state: tauri::State<'_, AppState>,
     report_id: String,
-) -> Result<Vec<ReportContent>> {
+) -> AppResult<Vec<ReportContent>> {
     let mut conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, reportId, section, contenu, ordre, metadata FROM report_contents WHERE reportId = ? ORDER BY ordre")?;
@@ -436,7 +442,7 @@ pub async fn add_report_timeline_event(
     report_id: String,
     date_event: String,
     description: String,
-) -> Result<ReportTimelineEvent> {
+) -> AppResult<ReportTimelineEvent> {
     let mut conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
     let id = generate_uuid();
@@ -448,7 +454,7 @@ pub async fn add_report_timeline_event(
         |row| row.get(0),
     )?;
     if exists == 0 {
-        return Err(anyhow::anyhow!("Report not found: {}", report_id));
+        return Err(AppError::msg(format!("Report not found: {}", report_id)));
     }
 
     conn.execute(
@@ -488,7 +494,7 @@ pub async fn add_report_timeline_event(
 pub async fn get_report_timeline(
     state: tauri::State<'_, AppState>,
     report_id: String,
-) -> Result<Vec<ReportTimelineEvent>> {
+) -> AppResult<Vec<ReportTimelineEvent>> {
     let mut conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, reportId, dateEvent, description, type, metadata FROM report_timeline WHERE reportId = ? ORDER BY dateEvent DESC")?;
