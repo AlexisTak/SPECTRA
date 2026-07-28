@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>SPECTRA — banc d'essai du canvas graphe</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #0b1120;
+        color: #e2e8f0;
+        font: 14px/1.5 ui-sans-serif, system-ui, sans-serif;
+      }
+      #graph { position: absolute; inset: 0; }
+      #hud {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 10;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        padding: 12px 16px;
+        min-width: 260px;
+      }
+      #hud h1 { font-size: 13px; margin: 0 0 8px; letter-spacing: 0.04em; text-transform: uppercase; color: #94a3b8; }
+      #hud dl { display: grid; grid-template-columns: auto auto; gap: 2px 16px; margin: 0; }
+      #hud dt { color: #94a3b8; }
+      #hud dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+      .ok { color: #4ade80; }
+      .ko { color: #f87171; }
+    </style>
+  </head>
+  <body>
+    <div id="graph"></div>
+    <div id="hud">
+      <h1>Banc d'essai</h1>
+      <div id="status">Génération du graphe…</div>
+      <dl id="metrics"></dl>
+    </div>
+    <script type="module">
+      import { runRenderBench } from './bench-render.ts'
+
+      const params = new URLSearchParams(location.search)
+      const nodes = Number(params.get('nodes') ?? 50000)
+      const edges = Number(params.get('edges') ?? 150000)
+
+      const status = document.getElementById('status')
+      const metrics = document.getElementById('metrics')
+
+      function row(label, value, cls = '') {
+        return `<dt>${label}</dt><dd class="${cls}">${value}</dd>`
+      }
+
+      runRenderBench(nodes, edges)
+        .then((r) => {
+          status.textContent = r.passed ? 'Critères tenus' : 'Critères non tenus'
+          status.className = r.passed ? 'ok' : 'ko'
+          metrics.innerHTML = [
+            row('Nœuds', r.nodes.toLocaleString('fr-FR')),
+            row('Arêtes', r.edges.toLocaleString('fr-FR')),
+            row('Génération', `${r.generationMs} ms`),
+            row('Layout FA2', `${(r.layoutMs / 1000).toFixed(1)} s`),
+            row('Premier rendu', `${r.firstRenderMs} ms`),
+            row('FPS moyen', r.fpsAvg, r.fpsAvg >= 45 ? 'ok' : 'ko'),
+            row('FPS p5', r.fpsP5, r.fpsP5 >= 45 ? 'ok' : 'ko'),
+            row('FPS min', r.fpsMin),
+            row('Mémoire', `${r.heapMb} Mo`, r.heapMb < 1536 ? 'ok' : 'ko'),
+          ].join('')
+        })
+        .catch((e) => {
+          status.textContent = `Échec : ${e.message}`
+          status.className = 'ko'
+          window.__BENCH_ERROR__ = String(e)
+        })
+    </script>
+  </body>
+</html>
