@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 const NAV = [
   { href: '/', label: 'Tableau de bord' },
   { href: '/cases', label: 'Dossiers' },
+  { href: '/osint', label: 'OSINT', highlight: true },
   { href: '/graph', label: 'Graphe' },
   { href: '/search', label: 'Recherche' },
   { href: '/reports', label: 'Rapports' },
@@ -34,8 +35,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <nav className="flex flex-col gap-0.5 p-3">
           {NAV.map((item) => {
-            // `/` ne doit être actif que sur l'accueil exact, sinon il le
-            // resterait sur toutes les routes.
             const active =
               item.href === '/'
                 ? pathname === '/'
@@ -45,13 +44,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'rounded px-3 py-2 text-sm transition-colors',
+                  'relative flex items-center justify-between rounded px-3 py-2 text-sm transition-colors',
                   active
                     ? 'bg-sky-500/15 text-sky-200'
                     : 'text-[var(--color-muted)] hover:bg-white/5 hover:text-[var(--color-ink)]',
+                  (item as any).highlight && 'bg-gradient-to-r from-amber-500/10 to-rose-500/10 border border-amber-500/20',
                 )}
               >
                 {item.label}
+                {(item as any).highlight && (
+                  <span className="ml-2 rounded bg-gradient-to-r from-amber-500 to-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    NEW
+                  </span>
+                )}
               </Link>
             )
           })}
