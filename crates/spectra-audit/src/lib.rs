@@ -25,8 +25,9 @@
 //! 5. **Ordre total explicite** : les événements portent un numéro de séquence
 //!    monotone par dossier. Trier sur un horodatage à la seconde ne définit pas
 //!    un ordre (`audit.md`, P2-14).
-//!
-//! # État
-//!
-//! Phase 0 : crate déclaré et intégré au workspace. L'implémentation du
-//! chaînage est l'objet de la Phase 1.
+
+pub mod canonical;
+pub mod chain;
+
+pub use canonical::canonical_json;
+pub use chain::{compute_link, verify_chain, verify_link, AuditEvent, ChainLink};

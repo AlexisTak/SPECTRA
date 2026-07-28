@@ -18,10 +18,10 @@
 //!    stockage direct.
 //! 4. **Aucune fusion d'entités n'est automatique.** La résolution d'identité
 //!    propose, un humain décide, et la fusion reste réversible.
-//!
-//! # État
-//!
-//! Phase 0 : le crate est déclaré et intégré au workspace. Le modèle
-//! [`Observation`] est l'objet de la Phase 1 et n'est pas encore écrit.
-//!
-//! [`Observation`]: https://example.invalid/phase-1
+
+pub mod entity;
+
+pub use entity::{
+    AdmiraltyCode, Entity, EntityId, EntityKind, InformationCredibility, Observation,
+    ObservationId, PropertyValue, Provenance, SourceReliability,
+};
