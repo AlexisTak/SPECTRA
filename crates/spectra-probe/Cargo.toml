@@ -1,0 +1,51 @@
+[package]
+name = "spectra-probe"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0"
+description = "Moteur d'exécution de sondes OSINT"
+
+[dependencies]
+spectra-core = { path = "../spectra-core" }
+spectra-audit = { path = "../spectra-audit" }
+
+# Async
+tokio = { workspace = true, features = ["full"] }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
+futures = { workspace = true }
+
+# HTTP
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "json", "stream"] }
+url = { workspace = true }
+http = "1.1"
+
+# Data
+serde = { workspace = true }
+serde_json = { workspace = true }
+blake3 = { workspace = true }
+
+# Validation
+regex = { workspace = true }
+
+# Rate limiting
+governor = "0.8"
+
+# Time
+chrono = { workspace = true }
+humantime-serde = { workspace = true }
+
+# Error
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Cache
+dashmap = "6"
+
+# Random for control probes
+rand = "0.9"
+
+# Persistence (health db)
+rusqlite = { workspace = true }

@@ -1,0 +1,23 @@
+[package]
+name = "spectra-probe-gen"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0"
+description = "Générateur de sondes OSINT depuis les datasets amont"
+
+[dependencies]
+spectra-probe = { path = "../spectra-probe" }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+blake3 = { workspace = true }
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = "0.3"

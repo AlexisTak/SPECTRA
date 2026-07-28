@@ -14,6 +14,8 @@ members = [
     "crates/spectra-core",
     "crates/spectra-store",
     "crates/spectra-audit",
+    "crates/spectra-probe",
+    "crates/spectra-probe-gen",
 ]
 
 [workspace.package]
@@ -34,15 +36,39 @@ rusqlite = { version = "0.40", features = ["bundled", "serde_json"] }
 # Hachage / audit
 sha2 = "0.10"
 hex = "0.4"
+blake3 = "1.5"
 
 # Erreurs
 thiserror = "2.0"
 
 # Temps
 chrono = { version = "0.4", features = ["serde"] }
+humantime-serde = "1.1"
 
 # Identifiants
 uuid = { version = "1.6", features = ["v4", "v7", "serde"] }
+
+# Async
+tokio = { version = "1.35", features = ["full"] }
+tokio-stream = "0.1"
+tokio-util = { version = "0.7", features = ["rt"] }
+futures = "0.3"
+
+# HTTP
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "json", "stream"] }
+url = "2.5"
+
+# Validation
+regex = "1.10"
+
+# Rate limiting
+governor = "0.8"
+
+# Logging
+tracing = "0.1"
+
+# Cache
+dashmap = "6"
 
 # Crates internes
 spectra-core = { path = "crates/spectra-core" }
