@@ -9,6 +9,7 @@ use crate::database::{generate_uuid, AppState};
 use chrono::Utc;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct AuditEvent {
     pub id: String,
     pub case_id: String,
@@ -23,6 +24,7 @@ pub struct AuditEvent {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct AuditTrailVerification {
     pub ok: bool,
     pub total: usize,
@@ -42,49 +44,76 @@ pub async fn verify_audit_trail(
 ) -> AppResult<AuditTrailVerification> {
     let mut conn = state.get_conn().await;
 
-    // Get all audit events for case
-    let mut stmt = conn.prepare("SELECT id, caseId, action, entityKind, entityId, actor, metadata, imma, imma_precedent, timestamp FROM audit_events WHERE caseId = ? ORDER BY timestamp ASC")?;
-    let db_events: Vec<AuditEvent> = stmt.query_map(rusqlite::params![case_id], |row| {
-        Ok(AuditEvent {
-            id: row.get(0)?,
-            case_id: row.get(1)?,
-            action: row.get(2)?,
-            entity_kind: row.get(3)?,
-            entity_id: row.get(4)?,
-            actor: row.get(5)?,
-            metadata: row.get(6)?,
-            imma: row.get(7)?,
-            imma_precedent: row.get(8)?,
-            timestamp: row.get(9)?,
-        })
-    })?.filter_map(|e| e.ok()).collect();
+    // Ordonné par `sequence`, pas par `timestamp` : deux événements de la même
+    // seconde sont indiscernables par l'horodatage, et l'ordre conditionne la
+    // vérification du chaînage (`audit.md`, P2-14).
+    let mut stmt = conn.prepare(
+        "SELECT id, caseId, sequence, action, entityKind, entityId, actor, metadata, imma, imma_precedent, timestamp \
+         FROM audit_events WHERE caseId = ? ORDER BY sequence ASC",
+    )?;
 
-    let total = db_events.len();
+    struct Row {
+        event: AuditEvent,
+        sequence: u64,
+        /// Métadonnées telles qu'écrites : le hachage porte sur cette valeur.
+        payload: serde_json::Value,
+    }
 
-    // Convert to spectra_audit::AuditEvent for verification
+    let rows: Vec<Row> = stmt
+        .query_map(rusqlite::params![case_id], |row| {
+            let metadata_raw: Option<String> = row.get(7)?;
+            let payload = metadata_raw
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok())
+                .unwrap_or_else(|| serde_json::json!({}));
+
+            Ok(Row {
+                sequence: row.get::<_, i64>(2)? as u64,
+                payload: payload.clone(),
+                event: AuditEvent {
+                    id: row.get(0)?,
+                    case_id: row.get(1)?,
+                    action: row.get(3)?,
+                    entity_kind: row.get(4)?,
+                    entity_id: row.get(5)?,
+                    actor: row.get(6)?,
+                    metadata: Some(payload),
+                    imma: row.get(8)?,
+                    imma_precedent: row.get(9)?,
+                    timestamp: row.get(10)?,
+                },
+            })
+        })?
+        .filter_map(Result::ok)
+        .collect();
+
+    let total = rows.len();
+
+    // Reconstruit les événements **exactement** tels qu'ils ont été hachés.
+    // Toute divergence — y compris sur `sequence` ou `actor` — fait échouer la
+    // vérification, ce qui est le comportement voulu.
     let mut events: Vec<spectra_audit::AuditEvent> = Vec::new();
     let mut links: Vec<spectra_audit::ChainLink> = Vec::new();
 
-    for db_event in &db_events {
-        let payload = db_event.metadata.clone().unwrap_or_else(|| serde_json::json!({}));
-        let sequence: u64 = db_event.id.chars().filter(|c| c.is_ascii_digit()).collect::<String>().parse().unwrap_or(0);
-
+    for row in &rows {
         events.push(spectra_audit::AuditEvent {
-            id: db_event.id.clone(),
-            case_id: db_event.case_id.clone(),
-            action: db_event.action.clone(),
-            entity_kind: db_event.entity_kind.clone(),
-            entity_id: db_event.entity_id.clone(),
-            actor: db_event.actor.clone().unwrap_or_else(|| "unknown".to_string()),
-            sequence,
-            payload,
+            id: row.event.id.clone(),
+            case_id: row.event.case_id.clone(),
+            action: row.event.action.clone(),
+            entity_kind: row.event.entity_kind.clone(),
+            entity_id: row.event.entity_id.clone(),
+            actor: row.event.actor.clone().unwrap_or_default(),
+            sequence: row.sequence,
+            payload: row.payload.clone(),
         });
 
         links.push(spectra_audit::ChainLink {
-            hash: db_event.imma.clone(),
-            previous_hash: db_event.imma_precedent.clone().unwrap_or_default(),
+            hash: row.event.imma.clone(),
+            previous_hash: row.event.imma_precedent.clone().unwrap_or_default(),
         });
     }
+
+    let db_events: Vec<AuditEvent> = rows.into_iter().map(|r| r.event).collect();
 
     // Use the verified verify_chain function from spectra-audit
     match spectra_audit::verify_chain(&events, &links) {
@@ -113,6 +142,7 @@ pub async fn verify_audit_trail(
 // =============================================================================
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct ListAuditOptions {
     pub limit: Option<i64>,
     pub action: Option<String>,
@@ -171,6 +201,7 @@ pub async fn list_audit(
 // =============================================================================
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct LogAccessInput {
     pub case_id: String,
     pub actor: String,

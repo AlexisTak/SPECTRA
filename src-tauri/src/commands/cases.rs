@@ -10,6 +10,7 @@ use tauri::command;
 use crate::database::AppState;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateCaseInput {
     pub titre: String,
     pub description: Option<String>,
@@ -21,6 +22,7 @@ pub struct CreateCaseInput {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateCaseInput {
     pub titre: Option<String>,
     pub description: Option<String>,
@@ -32,6 +34,7 @@ pub struct UpdateCaseInput {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Case {
     pub id: String,
     pub reference: String,
@@ -197,25 +200,26 @@ pub async fn create_case(
         ],
     )?;
 
-    // Add to FTS index
-    conn.execute(
-        "INSERT INTO fts_cases (rowid, reference, titre, description) VALUES (?, ?, ?, ?)",
-        rusqlite::params![&id, &reference, &data.titre, &data.description],
-    )?;
+    // L'indexation plein texte est faite par les déclencheurs SQL
+    // (`create_fts_triggers`) : l'insertion manuelle produisait un doublon
+    // (`audit.md`, P2-9) et échouait de toute façon, `rowid` devant être un
+    // entier alors qu'on lui passait un UUID (P2-2).
 
-    // Log audit event
-    conn.execute(
-        "INSERT INTO audit_events (id, caseId, action, entityKind, entityId, imma, imma_precedent, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        rusqlite::params![
-            &crate::database::generate_uuid(),
-            &id,
-            "create",
-            "case",
-            &id,
-            &format!("hex(sha256('create:case:{}:{}'))", id, now),
-            "NULL",
-            &serde_json::to_string(&serde_json::json!({"reference": reference}))?,
-        ],
+    // Premier maillon de la chaîne d'audit.
+    //
+    // La version d'origine stockait la **chaîne littérale**
+    // `hex(sha256('create:case:…'))` — du texte, pas un hachage — et `"NULL"`
+    // en guise de maillon précédent (`audit.md`, P1-3, P1-4). La vérification
+    // signalait donc une rupture dès le premier événement, ce qu'a révélé le
+    // parcours de bout en bout.
+    crate::database::append_audit_event(
+        &conn,
+        &id,
+        "create",
+        "case",
+        Some(&id),
+        "system",
+        serde_json::json!({ "reference": reference }),
     )?;
 
     drop(conn);

@@ -304,10 +304,21 @@ CREATE TABLE IF NOT EXISTS claims (
 );
 "#;
 
+/// Journal d'audit hash-chaîné.
+///
+/// `sequence` est **persisté** et non reconstruit : il entre dans le calcul du
+/// hachage, donc le recalcul à la vérification doit retrouver exactement la
+/// valeur utilisée à l'écriture. La version d'origine le dérivait des chiffres
+/// de l'UUID, ce qui rendait toute vérification impossible.
+///
+/// Il fournit aussi l'ordre total que l'horodatage ne garantit pas : deux
+/// événements de la même seconde sont indiscernables par `timestamp`
+/// (`audit.md`, P2-14).
 const AUDIT_EVENTS_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS audit_events (
     id TEXT PRIMARY KEY,
     caseId TEXT NOT NULL,
+    sequence INTEGER NOT NULL DEFAULT 1,
     action TEXT NOT NULL,
     entityKind TEXT NOT NULL,
     entityId TEXT,
@@ -316,7 +327,8 @@ CREATE TABLE IF NOT EXISTS audit_events (
     imma TEXT NOT NULL,
     imma_precedent TEXT,
     timestamp TEXT NOT NULL DEFAULT (datetime('now')),
-    FOREIGN KEY (caseId) REFERENCES cases(id) ON DELETE CASCADE
+    FOREIGN KEY (caseId) REFERENCES cases(id) ON DELETE CASCADE,
+    UNIQUE (caseId, sequence)
 );
 "#;
 
@@ -482,150 +494,163 @@ CREATE TABLE IF NOT EXISTS audit_settings (
 // FTS5 SEARCH TABLES
 // =============================================================================
 
+/// Crée les index de recherche plein texte.
+///
+/// Les tables sont **autonomes** (pas de `content=`), avec l'identifiant métier
+/// stocké dans une colonne `UNINDEXED`.
+///
+/// Le schéma d'origine déclarait `content = 'cases', content_rowid = 'id'`,
+/// or FTS5 exige que `content_rowid` désigne un **entier**. Les identifiants
+/// étant des UUID textuels, toute insertion échouait sur `datatype mismatch` —
+/// donc toute création de dossier (`audit.md`, P2-2).
+///
+/// Les anciennes tables sont supprimées : leur schéma est irréparable, et les
+/// bases déjà créées resteraient inutilisables.
 fn create_fts_tables(conn: &Connection) -> AppResult<()> {
-    conn.execute_batch(r#"
+    conn.execute_batch(
+        r#"
+        DROP TABLE IF EXISTS fts_cases;
+        DROP TABLE IF EXISTS fts_evidence;
+        DROP TABLE IF EXISTS fts_tiktok_videos;
+        DROP TABLE IF EXISTS fts_subjects;
+        DROP TABLE IF EXISTS fts_reports;
+        DROP TABLE IF EXISTS fts_web_archives;
+        DROP TABLE IF EXISTS fts_notes;
+
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_cases USING fts5(
-            reference,
-            titre,
-            description,
-            content = 'cases',
-            content_rowid = 'id'
+            entity_id UNINDEXED, reference, titre, description
         );
-    "#)?;
-
-    conn.execute_batch(r#"
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_evidence USING fts5(
-            nom,
-            description,
-            chemin,
-            content = 'evidence',
-            content_rowid = 'id'
+            entity_id UNINDEXED, nom, description, chemin
         );
-    "#)?;
-
-    conn.execute_batch(r#"
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_tiktok_videos USING fts5(
-            videoId,
-            auteur,
-            description,
-            content = 'tiktok_videos',
-            content_rowid = 'id'
+            entity_id UNINDEXED, videoId, auteur, description
         );
-    "#)?;
-
-    conn.execute_batch(r#"
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_subjects USING fts5(
-            nom,
-            prenom,
-            description,
-            email,
-            telephone,
-            content = 'subjects',
-            content_rowid = 'id'
+            entity_id UNINDEXED, nom, prenom, description, email, telephone
         );
-    "#)?;
-
-    conn.execute_batch(r#"
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_reports USING fts5(
-            reference,
-            titre,
-            description,
-            content = 'reports',
-            content_rowid = 'id'
+            entity_id UNINDEXED, reference, titre, description
         );
-    "#)?;
-
-    conn.execute_batch(r#"
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_web_archives USING fts5(
-            url,
-            title,
-            content,
-            content = 'web_archives',
-            content_rowid = 'id'
+            entity_id UNINDEXED, url, title, content
         );
-    "#)?;
-
-    conn.execute_batch(r#"
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_notes USING fts5(
-            titre,
-            contenu,
-            content = 'notes',
-            content_rowid = 'id'
+            entity_id UNINDEXED, titre, contenu
         );
-    "#)?;
+    "#,
+    )?;
 
     Ok(())
 }
 
+/// Maintient les index de recherche synchronisés avec les tables métier.
+///
+/// Les déclencheurs d'origine inséraient dans `rowid` (entier) un UUID textuel
+/// et ne couvraient que 3 entités sur 7 : `subjects`, `reports`,
+/// `web_archives` et `notes` n'étaient jamais désindexés à la suppression.
+/// Des données personnelles de sujets supprimés restaient donc indéfiniment
+/// dans l'index — un défaut d'effacement au sens du RGPD (`audit.md`, P1-9,
+/// P2-10).
+///
+/// Les déclencheurs couvrent désormais insertion, mise à jour et suppression
+/// pour les sept entités. Les commandes n'ont plus à indexer manuellement :
+/// la double indexation était un autre défaut relevé (P2-9).
 fn create_fts_triggers(conn: &Connection) -> AppResult<()> {
-    conn.execute_batch(r#"
+    conn.execute_batch(
+        r#"
+        DROP TRIGGER IF EXISTS cases_ai;
+        DROP TRIGGER IF EXISTS cases_ad;
+        DROP TRIGGER IF EXISTS cases_au;
+        DROP TRIGGER IF EXISTS evidence_ai;
+        DROP TRIGGER IF EXISTS evidence_ad;
+        DROP TRIGGER IF EXISTS evidence_au;
+        DROP TRIGGER IF EXISTS tiktok_videos_ai;
+        DROP TRIGGER IF EXISTS tiktok_videos_ad;
+        DROP TRIGGER IF EXISTS tiktok_videos_au;
+
         CREATE TRIGGER IF NOT EXISTS cases_ai AFTER INSERT ON cases BEGIN
-            INSERT INTO fts_cases(rowid, reference, titre, description)
+            INSERT INTO fts_cases(entity_id, reference, titre, description)
             VALUES(new.id, new.reference, new.titre, new.description);
         END;
-    "#)?;
-
-    conn.execute_batch(r#"
         CREATE TRIGGER IF NOT EXISTS cases_ad AFTER DELETE ON cases BEGIN
-            INSERT INTO fts_cases(fts_cases, rowid, reference, titre, description)
-            VALUES('delete', old.id, old.reference, old.titre, old.description);
+            DELETE FROM fts_cases WHERE entity_id = old.id;
         END;
-    "#)?;
-
-    conn.execute_batch(r#"
         CREATE TRIGGER IF NOT EXISTS cases_au AFTER UPDATE ON cases BEGIN
-            INSERT INTO fts_cases(fts_cases, rowid, reference, titre, description)
-            VALUES('delete', old.id, old.reference, old.titre, old.description);
-            INSERT INTO fts_cases(rowid, reference, titre, description)
+            DELETE FROM fts_cases WHERE entity_id = old.id;
+            INSERT INTO fts_cases(entity_id, reference, titre, description)
             VALUES(new.id, new.reference, new.titre, new.description);
         END;
-    "#)?;
 
-    conn.execute_batch(r#"
         CREATE TRIGGER IF NOT EXISTS evidence_ai AFTER INSERT ON evidence BEGIN
-            INSERT INTO fts_evidence(rowid, nom, description, chemin)
+            INSERT INTO fts_evidence(entity_id, nom, description, chemin)
             VALUES(new.id, new.nom, new.description, new.chemin);
         END;
-    "#)?;
-
-    conn.execute_batch(r#"
         CREATE TRIGGER IF NOT EXISTS evidence_ad AFTER DELETE ON evidence BEGIN
-            INSERT INTO fts_evidence(fts_evidence, rowid, nom, description, chemin)
-            VALUES('delete', old.id, old.nom, old.description, old.chemin);
+            DELETE FROM fts_evidence WHERE entity_id = old.id;
         END;
-    "#)?;
-
-    conn.execute_batch(r#"
         CREATE TRIGGER IF NOT EXISTS evidence_au AFTER UPDATE ON evidence BEGIN
-            INSERT INTO fts_evidence(fts_evidence, rowid, nom, description, chemin)
-            VALUES('delete', old.id, old.nom, old.description, old.chemin);
-            INSERT INTO fts_evidence(rowid, nom, description, chemin)
+            DELETE FROM fts_evidence WHERE entity_id = old.id;
+            INSERT INTO fts_evidence(entity_id, nom, description, chemin)
             VALUES(new.id, new.nom, new.description, new.chemin);
         END;
-    "#)?;
 
-    conn.execute_batch(r#"
+        CREATE TRIGGER IF NOT EXISTS subjects_ai AFTER INSERT ON subjects BEGIN
+            INSERT INTO fts_subjects(entity_id, nom, prenom, description, email, telephone)
+            VALUES(new.id, new.nom, new.prenom, new.description, new.email, new.telephone);
+        END;
+        CREATE TRIGGER IF NOT EXISTS subjects_ad AFTER DELETE ON subjects BEGIN
+            DELETE FROM fts_subjects WHERE entity_id = old.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS subjects_au AFTER UPDATE ON subjects BEGIN
+            DELETE FROM fts_subjects WHERE entity_id = old.id;
+            INSERT INTO fts_subjects(entity_id, nom, prenom, description, email, telephone)
+            VALUES(new.id, new.nom, new.prenom, new.description, new.email, new.telephone);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS reports_ai AFTER INSERT ON reports BEGIN
+            INSERT INTO fts_reports(entity_id, reference, titre, description)
+            VALUES(new.id, new.reference, new.titre, new.description);
+        END;
+        CREATE TRIGGER IF NOT EXISTS reports_ad AFTER DELETE ON reports BEGIN
+            DELETE FROM fts_reports WHERE entity_id = old.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS reports_au AFTER UPDATE ON reports BEGIN
+            DELETE FROM fts_reports WHERE entity_id = old.id;
+            INSERT INTO fts_reports(entity_id, reference, titre, description)
+            VALUES(new.id, new.reference, new.titre, new.description);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
+            INSERT INTO fts_notes(entity_id, titre, contenu)
+            VALUES(new.id, new.titre, new.contenu);
+        END;
+        CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+            DELETE FROM fts_notes WHERE entity_id = old.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
+            DELETE FROM fts_notes WHERE entity_id = old.id;
+            INSERT INTO fts_notes(entity_id, titre, contenu)
+            VALUES(new.id, new.titre, new.contenu);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS web_archives_ai AFTER INSERT ON web_archives BEGIN
+            INSERT INTO fts_web_archives(entity_id, url, title, content)
+            VALUES(new.id, new.url, new.title, new.content);
+        END;
+        CREATE TRIGGER IF NOT EXISTS web_archives_ad AFTER DELETE ON web_archives BEGIN
+            DELETE FROM fts_web_archives WHERE entity_id = old.id;
+        END;
+
         CREATE TRIGGER IF NOT EXISTS tiktok_videos_ai AFTER INSERT ON tiktok_videos BEGIN
-            INSERT INTO fts_tiktok_videos(rowid, videoId, auteur, description)
+            INSERT INTO fts_tiktok_videos(entity_id, videoId, auteur, description)
             VALUES(new.id, new.videoId, new.auteur, new.description);
         END;
-    "#)?;
-
-    conn.execute_batch(r#"
         CREATE TRIGGER IF NOT EXISTS tiktok_videos_ad AFTER DELETE ON tiktok_videos BEGIN
-            INSERT INTO fts_tiktok_videos(fts_tiktok_videos, rowid, videoId, auteur, description)
-            VALUES('delete', old.id, old.videoId, old.auteur, old.description);
+            DELETE FROM fts_tiktok_videos WHERE entity_id = old.id;
         END;
-    "#)?;
-
-    conn.execute_batch(r#"
-        CREATE TRIGGER IF NOT EXISTS tiktok_videos_au AFTER UPDATE ON tiktok_videos BEGIN
-            INSERT INTO fts_tiktok_videos(fts_tiktok_videos, rowid, videoId, auteur, description)
-            VALUES('delete', old.id, old.videoId, old.auteur, old.description);
-            INSERT INTO fts_tiktok_videos(rowid, videoId, auteur, description)
-            VALUES(new.id, new.videoId, new.auteur, new.description);
-        END;
-    "#)?;
+    "#,
+    )?;
 
     Ok(())
 }
@@ -634,42 +659,31 @@ fn create_fts_triggers(conn: &Connection) -> AppResult<()> {
 // AUDIT TRAIL TRIGGERS
 // =============================================================================
 
+/// Supprime les déclencheurs d'audit SQL hérités.
+///
+/// Ces déclencheurs appelaient `sha256()`, **qui n'existe pas dans SQLite** :
+/// toute création ou modification de dossier échouait sur
+/// `no such function: sha256` (`audit.md`, P1-5). Le défaut était invisible en
+/// lecture de code et n'est apparu qu'en soumettant le formulaire.
+///
+/// Ils ne sont pas réparés mais **retirés**, pour deux raisons :
+///
+/// 1. Le chaînage est désormais calculé en Rust (`spectra_audit::compute_link`)
+///    dans chacune des 18 commandes de mutation. Deux implémentations
+///    concurrentes du même hachage produiraient des maillons incohérents.
+/// 2. Leur génération d'identifiant (`MAX(id) + 1` sur des identifiants
+///    **textuels**) renvoyait toujours `1`, donc le deuxième événement de
+///    l'année violait la clé primaire.
+///
+/// Le `DROP` est nécessaire et non seulement le retrait du `CREATE` : les bases
+/// déjà créées portent les déclencheurs et resteraient inutilisables.
 fn create_audit_triggers(conn: &Connection) -> AppResult<()> {
-    conn.execute_batch(r#"
-        CREATE TRIGGER IF NOT EXISTS audit_insert AFTER INSERT ON cases BEGIN
-            INSERT INTO audit_events (id, caseId, action, entityKind, entityId, imma, imma_precedent, metadata)
-            VALUES (
-                'AE-' || strftime('%Y', 'now') || '-' || printf('%06d', (
-                    SELECT COALESCE(MAX(id), 0) + 1 FROM audit_events WHERE entityKind = 'case'
-                )),
-                new.id,
-                'create',
-                'case',
-                new.id,
-                hex(sha256('insert:case:' || new.id || ':' || datetime('now'))),
-                NULL,
-                json_patch('{}', json_object('reference', new.reference))
-            );
-        END;
-    "#)?;
-
-    conn.execute_batch(r#"
-        CREATE TRIGGER IF NOT EXISTS audit_update AFTER UPDATE ON cases BEGIN
-            INSERT INTO audit_events (id, caseId, action, entityKind, entityId, imma, imma_precedent, metadata)
-            VALUES (
-                'AE-' || strftime('%Y', 'now') || '-' || printf('%06d', (
-                    SELECT COALESCE(MAX(id), 0) + 1 FROM audit_events
-                )),
-                new.id,
-                'update',
-                'case',
-                new.id,
-                hex(sha256('update:case:' || new.id || ':' || datetime('now') || ':' || old.reference)),
-                hex(sha256('update:case:' || old.id || ':' || datetime('now') || ':' || old.reference)),
-                json_patch(json_object('before', json_object('reference', old.reference)), json_object('after', json_object('reference', new.reference)))
-            );
-        END;
-    "#)?;
+    conn.execute_batch(
+        r#"
+        DROP TRIGGER IF EXISTS audit_insert;
+        DROP TRIGGER IF EXISTS audit_update;
+    "#,
+    )?;
 
     Ok(())
 }
@@ -678,25 +692,25 @@ fn create_audit_triggers(conn: &Connection) -> AppResult<()> {
 // INTEGRITY TRIGGERS
 // =============================================================================
 
+/// Supprime le déclencheur d'intégrité hérité.
+///
+/// Même défaut de génération d'identifiant que les déclencheurs d'audit :
+/// `MAX(id) + 1` appliqué à des identifiants **textuels** (`IL-2026-000001`)
+/// renvoie toujours `1`. La deuxième preuve vérifiée de l'année violait donc la
+/// clé primaire, faisant échouer la mise à jour métier elle-même.
+///
+/// Par ailleurs il journalisait « Evidence hash verified » sur simple présence
+/// d'une empreinte, sans rien vérifier — exactement le faux positif rassurant
+/// que l'audit reproche à cette base de code (`audit.md`, P1-1).
+///
+/// La journalisation d'intégrité doit être faite en Rust, après relecture
+/// effective du fichier et recalcul de son empreinte.
 fn create_integrity_triggers(conn: &Connection) -> AppResult<()> {
-    conn.execute_batch(r#"
-        CREATE TRIGGER IF NOT EXISTS evidence_integrity AFTER UPDATE ON evidence
-        WHEN new.hash_sha256 IS NOT NULL AND old.hash_sha256 IS NULL BEGIN
-            INSERT INTO integrity_logs (id, caseId, checkedAt, checkedBy, totalEvidence, verifiedEvidence, brokenHash, message)
-            VALUES (
-                'IL-' || strftime('%Y', 'now') || '-' || printf('%06d', (
-                    SELECT COALESCE(MAX(id), 0) + 1 FROM integrity_logs
-                )),
-                new.caseId,
-                datetime('now'),
-                'system',
-                1,
-                1,
-                0,
-                'Evidence hash verified'
-            );
-        END;
-    "#)?;
+    conn.execute_batch(
+        r#"
+        DROP TRIGGER IF EXISTS evidence_integrity;
+    "#,
+    )?;
 
     Ok(())
 }
@@ -759,4 +773,77 @@ pub fn generate_report_reference(conn: &Connection) -> AppResult<String> {
 
 pub fn generate_uuid() -> String {
     uuid::Uuid::new_v4().to_string()
+}
+
+// =============================================================================
+// JOURNAL D'AUDIT
+// =============================================================================
+
+/// Écrit un maillon de la chaîne d'audit d'un dossier.
+///
+/// Point de passage **unique** pour toute écriture dans `audit_events`. Chaque
+/// commande de mutation répétait auparavant cette logique, avec des variantes
+/// subtiles — d'où des maillons incohérents détectés seulement à la
+/// vérification.
+///
+/// Garanties :
+///
+/// 1. `previous_hash` est lu depuis le dernier maillon **du même dossier**,
+///    ordonné par `sequence` (ordre total, contrairement à l'horodatage).
+/// 2. `sequence` est calculé ici et **persisté**, car il entre dans le hachage.
+/// 3. Le hachage est calculé par `spectra_audit`, jamais fourni par l'appelant.
+///
+/// L'appelant doit déjà détenir le verrou sur la connexion.
+pub fn append_audit_event(
+    conn: &Connection,
+    case_id: &str,
+    action: &str,
+    entity_kind: &str,
+    entity_id: Option<&str>,
+    actor: &str,
+    payload: serde_json::Value,
+) -> AppResult<()> {
+    let (previous_hash, previous_sequence): (String, i64) = conn
+        .query_row(
+            "SELECT imma, sequence FROM audit_events WHERE caseId = ? \
+             ORDER BY sequence DESC LIMIT 1",
+            params![case_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap_or_else(|_| (String::new(), 0));
+
+    let sequence = previous_sequence + 1;
+
+    let event = spectra_audit::AuditEvent {
+        id: generate_uuid(),
+        case_id: case_id.to_string(),
+        action: action.to_string(),
+        entity_kind: entity_kind.to_string(),
+        entity_id: entity_id.map(str::to_string),
+        actor: actor.to_string(),
+        sequence: sequence as u64,
+        payload,
+    };
+
+    let link = spectra_audit::compute_link(&event, &previous_hash);
+
+    conn.execute(
+        "INSERT INTO audit_events \
+         (id, caseId, sequence, action, entityKind, entityId, actor, metadata, imma, imma_precedent) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        params![
+            &event.id,
+            case_id,
+            sequence,
+            &event.action,
+            &event.entity_kind,
+            &event.entity_id,
+            &event.actor,
+            &serde_json::to_string(&event.payload)?,
+            &link.hash,
+            &link.previous_hash,
+        ],
+    )?;
+
+    Ok(())
 }

@@ -9,6 +9,7 @@ use crate::database::{generate_uuid, AppState};
 use chrono::Utc;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Subject {
     pub id: String,
     pub case_id: String,
@@ -26,6 +27,7 @@ pub struct Subject {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateSubjectInput {
     pub case_id: String,
     pub nom: Option<String>,
@@ -42,6 +44,7 @@ pub struct CreateSubjectInput {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateSubjectInput {
     pub nom: Option<String>,
     pub prenom: Option<String>,
@@ -96,6 +99,7 @@ pub async fn get_subjects(
 // =============================================================================
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateSubjectOptions {
     pub actor: Option<String>,
 }
@@ -237,6 +241,7 @@ fn get_subject_single(conn: &mut rusqlite::Connection, id: &str) -> AppResult<Su
 // =============================================================================
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateSubjectOptions {
     pub actor: Option<String>,
 }
@@ -379,6 +384,7 @@ pub async fn update_subject(
 // =============================================================================
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct DeleteSubjectOptions {
     pub actor: Option<String>,
 }

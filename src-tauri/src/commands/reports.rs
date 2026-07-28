@@ -9,6 +9,7 @@ use crate::database::{generate_report_reference, generate_uuid, AppState};
 use chrono::Utc;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Report {
     pub id: String,
     pub reference: String,
@@ -24,6 +25,7 @@ pub struct Report {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateReportInput {
     pub case_id: String,
     pub titre: String,
@@ -35,6 +37,7 @@ pub struct CreateReportInput {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateReportInput {
     pub titre: Option<String>,
     pub description: Option<String>,
@@ -44,6 +47,7 @@ pub struct UpdateReportInput {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ReportContent {
     pub id: String,
     pub report_id: String,
@@ -54,6 +58,7 @@ pub struct ReportContent {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ReportTimelineEvent {
     pub id: String,
     pub report_id: String,
@@ -64,6 +69,7 @@ pub struct ReportTimelineEvent {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ReportStats {
     pub total: i64,
     // Voir `ClaimStats` : `serde_json::Map` n'est pas générique sur la valeur.

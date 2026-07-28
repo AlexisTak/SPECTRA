@@ -9,6 +9,7 @@ use crate::database::{generate_uuid, AppState};
 use chrono::Utc;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CaseEvent {
     pub id: String,
     pub case_id: String,

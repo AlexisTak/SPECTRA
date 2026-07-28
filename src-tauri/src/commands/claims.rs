@@ -9,6 +9,7 @@ use crate::database::{generate_uuid, AppState};
 use chrono::Utc;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Claim {
     pub id: String,
     pub case_id: String,
@@ -25,6 +26,7 @@ pub struct Claim {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SetClaimInput {
     pub case_id: String,
     pub ref_kind: String,
@@ -40,6 +42,7 @@ pub struct SetClaimInput {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct ClaimStats {
     pub total: i64,
     // `serde_json::Map` est toujours `Map<String, Value>` : le paramétrer avec

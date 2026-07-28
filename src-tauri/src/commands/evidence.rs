@@ -9,6 +9,7 @@ use chrono::Utc;
 use crate::database::AppState;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Evidence {
     pub id: String,
     pub case_id: String,
@@ -27,6 +28,7 @@ pub struct Evidence {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct IntegrityCheck {
     pub evidence_id: String,
     pub hash_sha256: String,
@@ -37,6 +39,7 @@ pub struct IntegrityCheck {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CaseIntegrityReport {
     pub case_id: String,
     pub total_evidence: i64,
@@ -86,6 +89,7 @@ pub async fn get_evidence(
 // =============================================================================
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct AddEvidenceInput {
     pub case_id: String,
     pub r#type: String,
@@ -101,6 +105,7 @@ pub struct AddEvidenceInput {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct AddEvidenceOptions {
     pub actor: Option<String>,
     pub source: Option<String>,
@@ -230,6 +235,7 @@ fn get_evidence_single(conn: &mut rusqlite::Connection, id: &str) -> AppResult<E
 // =============================================================================
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct DeleteEvidenceOptions {
     pub actor: Option<String>,
 }

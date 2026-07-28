@@ -10,6 +10,7 @@ use crate::database::sha256_hash;
 use chrono::Utc;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub id: String,
     pub case_id: String,
@@ -24,6 +25,7 @@ pub struct Snapshot {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SnapshotContent {
     pub id: String,
     pub snapshot_id: String,
@@ -36,6 +38,7 @@ pub struct SnapshotContent {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SnapshotMetadata {
     pub id: String,
     pub case_id: String,
@@ -47,6 +50,7 @@ pub struct SnapshotMetadata {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateSnapshotInput {
     pub case_id: String,
     pub nom: String,

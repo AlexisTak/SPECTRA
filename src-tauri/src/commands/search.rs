@@ -8,6 +8,7 @@ use tauri::command;
 use crate::database::AppState;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchHit {
     pub id: String,
     pub kind: String,
@@ -18,6 +19,7 @@ pub struct SearchHit {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct _SearchOptions {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
