@@ -40,11 +40,11 @@ pub async fn verify_audit_trail(
     state: tauri::State<'_, AppState>,
     case_id: String,
 ) -> AppResult<AuditTrailVerification> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     // Get all audit events for case
     let mut stmt = conn.prepare("SELECT id, caseId, action, entityKind, entityId, actor, metadata, imma, imma_precedent, timestamp FROM audit_events WHERE caseId = ? ORDER BY timestamp ASC")?;
-    let events: Vec<AuditEvent> = stmt.query_map(rusqlite::params![case_id], |row| {
+    let db_events: Vec<AuditEvent> = stmt.query_map(rusqlite::params![case_id], |row| {
         Ok(AuditEvent {
             id: row.get(0)?,
             case_id: row.get(1)?,
@@ -59,47 +59,53 @@ pub async fn verify_audit_trail(
         })
     })?.filter_map(|e| e.ok()).collect();
 
-    let total = events.len();
+    let total = db_events.len();
 
-    // Verify chain integrity
-    let mut prev_hash: Option<String> = None;
-    for (i, event) in events.iter().enumerate() {
-        let current_hash = event.imma.clone();
+    // Convert to spectra_audit::AuditEvent for verification
+    let mut events: Vec<spectra_audit::AuditEvent> = Vec::new();
+    let mut links: Vec<spectra_audit::ChainLink> = Vec::new();
 
-        // Check if hash matches previous
-        if let Some(prev) = &event.imma_precedent {
-            if Some(prev) != prev_hash.as_ref() {
-                return Ok(AuditTrailVerification {
-                    ok: false,
-                    total,
-                    broken_at_id: Some(event.id.clone()),
-                    broken_at_index: Some(i),
-                    reason: Some(format!("Hash mismatch at event {}: expected {:?}, got {:?}", event.id, prev_hash, event.imma_precedent)),
-                });
-            }
-        }
+    for db_event in &db_events {
+        let payload = db_event.metadata.clone().unwrap_or_else(|| serde_json::json!({}));
+        let sequence: u64 = db_event.id.chars().filter(|c| c.is_ascii_digit()).collect::<String>().parse().unwrap_or(0);
 
-        // Verify current hash
-        if current_hash.is_empty() {
-            return Ok(AuditTrailVerification {
-                ok: false,
-                total,
-                broken_at_id: Some(event.id.clone()),
-                broken_at_index: Some(i),
-                reason: Some(format!("Empty hash at event {}", event.id)),
-            });
-        }
+        events.push(spectra_audit::AuditEvent {
+            id: db_event.id.clone(),
+            case_id: db_event.case_id.clone(),
+            action: db_event.action.clone(),
+            entity_kind: db_event.entity_kind.clone(),
+            entity_id: db_event.entity_id.clone(),
+            actor: db_event.actor.clone().unwrap_or_else(|| "unknown".to_string()),
+            sequence,
+            payload,
+        });
 
-        prev_hash = Some(current_hash);
+        links.push(spectra_audit::ChainLink {
+            hash: db_event.imma.clone(),
+            previous_hash: db_event.imma_precedent.clone().unwrap_or_default(),
+        });
     }
 
-    Ok(AuditTrailVerification {
-        ok: true,
-        total,
-        broken_at_id: None,
-        broken_at_index: None,
-        reason: None,
-    })
+    // Use the verified verify_chain function from spectra-audit
+    match spectra_audit::verify_chain(&events, &links) {
+        Ok(count) => Ok(AuditTrailVerification {
+            ok: true,
+            total: count,
+            broken_at_id: None,
+            broken_at_index: None,
+            reason: None,
+        }),
+        Err((index, reason)) => {
+            let broken_event_id = events.get(index).map(|e| e.id.clone()).or_else(|| db_events.get(index).map(|e| e.id.clone()));
+            Ok(AuditTrailVerification {
+                ok: false,
+                total,
+                broken_at_id: broken_event_id,
+                broken_at_index: Some(index),
+                reason: Some(reason),
+            })
+        }
+    }
 }
 
 // =============================================================================
