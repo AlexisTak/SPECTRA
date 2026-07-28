@@ -1,0 +1,17 @@
+[package]
+name = "spectra-store"
+version = "0.1.0"
+description = "Stockage SPECTRA : schéma SQLite, migrations, format de dossier .spectra, chiffrement."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+spectra-core = { workspace = true }
+rusqlite = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

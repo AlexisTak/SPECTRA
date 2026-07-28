@@ -1,0 +1,15 @@
+[package]
+name = "spectra-core"
+version = "0.1.0"
+description = "Modèle de domaine SPECTRA : entités, observations, provenance, temporalité. Aucune I/O."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+
+[lints]
+workspace = true

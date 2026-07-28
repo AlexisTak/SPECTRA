@@ -1,0 +1,50 @@
+# Configuration cargo-deny — contrainte C5 de CLAUDE.md
+#
+# Le cœur est sous AGPL-3.0-only. Toute dépendance sous licence non libre ou
+# incompatible doit casser le build, pas faire l'objet d'une revue a posteriori.
+
+[graph]
+all-features = false
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+# Licences permissives, toutes compatibles avec une distribution AGPL-3.0.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "BSL-1.0",
+    "CC0-1.0",
+    "Unlicense",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "AGPL-3.0-only",
+]
+confidence-threshold = 0.9
+
+# Les licences copyleft fortes autres que la nôtre (GPL-2.0, LGPL, SSPL, EUPL…)
+# ne sont pas listées : elles feront échouer la CI et devront faire l'objet
+# d'une décision explicite documentée en ADR.
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Un seul crate peut déclarer links = "sqlite3" : deux versions de rusqlite dans
+# le workspace rendent la résolution impossible (constaté le 2026-07-28).
+deny = []
+skip = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

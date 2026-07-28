@@ -1,0 +1,20 @@
+[package]
+name = "spectra-audit"
+version = "0.1.0"
+description = "Journal d'audit SPECTRA : sérialisation canonique et chaînage de hachages vérifiable."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+spectra-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
