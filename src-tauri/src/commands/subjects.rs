@@ -153,7 +153,29 @@ pub async fn create_subject(
         )?;
     }
 
-    // Add case event
+    // Récupère le dernier hash d'audit pour ce dossier (chaînage).
+    let previous_hash: Option<String> = conn
+        .query_row(
+            "SELECT imma FROM audit_events WHERE caseId = ? ORDER BY timestamp DESC LIMIT 1",
+            rusqlite::params![&data.case_id],
+            |row| row.get(0),
+        )
+        .ok();
+    let previous_hash = previous_hash.unwrap_or_default();
+
+    // Construit l'événement d'audit et calcule son hash chaîné.
+    let audit_event = spectra_audit::AuditEvent {
+        id: crate::database::generate_uuid(),
+        case_id: data.case_id.clone(),
+        action: "create".to_string(),
+        entity_kind: "subject".to_string(),
+        entity_id: Some(id.clone()),
+        actor: _options.as_ref().and_then(|o| o.actor.clone()).unwrap_or_else(|| "system".to_string()),
+        sequence: 1,
+        payload: serde_json::json!({"statut": statut, "nom": data.nom}),
+    };
+    let link = spectra_audit::compute_link(&audit_event, &previous_hash);
+
     conn.execute(
         "INSERT INTO case_events (id, caseId, type, titre, description, timestamp, actor, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         rusqlite::params![
@@ -165,6 +187,20 @@ pub async fn create_subject(
             &now,
             &_options.as_ref().and_then(|o| o.actor.clone()),
             &serde_json::to_string(&_options)?,
+        ],
+    )?;
+
+    conn.execute(
+        "INSERT INTO audit_events (id, caseId, action, entityKind, entityId, imma, imma_precedent, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        rusqlite::params![
+            &audit_event.id,
+            &data.case_id,
+            &audit_event.action,
+            &audit_event.entity_kind,
+            &audit_event.entity_id,
+            &link.hash,
+            &link.previous_hash,
+            &serde_json::to_string(&audit_event.payload)?,
         ],
     )?;
 
