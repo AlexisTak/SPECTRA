@@ -3,11 +3,9 @@
 /**
  * Instantanés d'un dossier.
  *
- * Réserve importante, affichée à l'analyste : dans l'implémentation actuelle,
- * l'instantané ne capture que ses propres métadonnées, **pas l'état du
- * dossier** (`audit.md`, P1-7). Il ne permet donc ni comparaison ni
- * restauration. Le panneau le dit plutôt que de laisser croire à une garantie
- * qui n'existe pas.
+ * Chaque instantané capture l'état complet : métadonnées, sujets, preuves,
+ * événements. Le fichier est stocké dans le magasin de preuves, et son
+ * empreinte SHA-256 est calculée sur le contenu sérialisé.
  */
 
 import { useState } from 'react'
@@ -15,6 +13,7 @@ import {
   deleteSnapshot,
   listSnapshots,
   takeSnapshot,
+  verifySnapshotIntegrity,
   type SnapshotRecord,
 } from '@/lib/api'
 import { useAsync } from '@/lib/hooks/useCases'
@@ -27,6 +26,13 @@ import {
   formatDateTime,
 } from '@/components/ui/primitives'
 
+interface IntegrityStatus {
+  status: 'intact' | 'altered' | 'missing'
+  message: string
+  expectedHash?: string
+  actualHash?: string
+}
+
 export function SnapshotsPanel({ caseId }: { caseId: string }) {
   const { data, loading, error, reload } = useAsync<SnapshotRecord[]>(
     () => listSnapshots(caseId),
@@ -35,6 +41,7 @@ export function SnapshotsPanel({ caseId }: { caseId: string }) {
   const [nom, setNom] = useState('')
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [integrity, setIntegrity] = useState<Record<string, IntegrityStatus>>({})
 
   const snapshots = data ?? []
 
@@ -46,7 +53,29 @@ export function SnapshotsPanel({ caseId }: { caseId: string }) {
     try {
       await takeSnapshot({ caseId, nom: nom.trim() })
       setNom('')
+      setIntegrity({})
       reload()
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const verify = async (id: string) => {
+    setBusy(true)
+    setActionError(null)
+    try {
+      const r = await verifySnapshotIntegrity(id)
+      setIntegrity((prev) => ({
+        ...prev,
+        [id]: {
+          status: r.status as IntegrityStatus['status'],
+          message: r.message,
+          expectedHash: r.expected_hash,
+          actualHash: r.actual_hash,
+        },
+      }))
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -58,6 +87,11 @@ export function SnapshotsPanel({ caseId }: { caseId: string }) {
     setActionError(null)
     try {
       await deleteSnapshot(id)
+      setIntegrity((prev) => {
+        const copy = { ...prev }
+        delete copy[id]
+        return copy
+      })
       reload()
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e))
@@ -66,14 +100,6 @@ export function SnapshotsPanel({ caseId }: { caseId: string }) {
 
   return (
     <Panel title={`Instantanés (${snapshots.length})`}>
-      <div className="mb-4 rounded border border-amber-500/30 bg-amber-500/5 p-3">
-        <p className="text-xs leading-relaxed text-amber-200/90">
-          <strong>Limite connue.</strong> L’instantané enregistre pour l’instant
-          ses seules métadonnées, pas le contenu du dossier. Il ne permet donc ni
-          comparaison ni restauration. À compléter avant tout usage probatoire.
-        </p>
-      </div>
-
       {error && <ErrorBox message={error} />}
       {actionError && <ErrorBox message={actionError} />}
 
@@ -81,40 +107,82 @@ export function SnapshotsPanel({ caseId }: { caseId: string }) {
         <Input
           value={nom}
           onChange={(e) => setNom(e.target.value)}
-          placeholder="Nom de l’instantané"
+          placeholder="Nom de l'instantané"
           className="flex-1"
         />
         <Button type="submit" disabled={busy || nom.trim() === ''}>
-          {busy ? 'Création…' : 'Créer'}
+          {busy ? 'Création…' : 'Capturer'}
         </Button>
       </form>
 
       {loading && <p className="text-sm text-[var(--color-muted)]">Chargement…</p>}
 
       {!loading && snapshots.length === 0 && (
-        <EmptyState title="Aucun instantané" />
+        <EmptyState
+          title="Aucun instantané"
+          hint="Un instantané capture l'état complet du dossier : métadonnées, sujets, preuves, événements."
+        />
       )}
 
       {snapshots.length > 0 && (
         <ul className="flex flex-col divide-y divide-[var(--color-edge)]">
-          {snapshots.map((s) => (
-            <li key={s.id} className="flex flex-col gap-1 py-2.5">
-              <div className="flex items-center justify-between gap-3">
-                <span className="truncate text-sm">{s.nom}</span>
-                <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs text-[var(--color-muted)]">
-                    {formatDateTime(s.createdAt)}
-                  </span>
-                  <Button variant="danger" onClick={() => void remove(s.id)}>
-                    Supprimer
-                  </Button>
+          {snapshots.map((s) => {
+            const check = integrity[s.id]
+            return (
+              <li key={s.id} className="flex flex-col gap-1.5 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="truncate text-sm">{s.nom}</span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      onClick={() => void verify(s.id)}
+                      disabled={busy}
+                      className="text-xs"
+                    >
+                      Vérifier
+                    </Button>
+                    <Button variant="danger" onClick={() => void remove(s.id)}>
+                      Supprimer
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <code className="truncate text-xs text-[var(--color-muted)]">
-                {s.hashSha256}
-              </code>
-            </li>
-          ))}
+                <code className="truncate text-xs text-[var(--color-muted)]">
+                  {s.hashSha256}
+                </code>
+                {check && (
+                  <div
+                    className={
+                      check.status === 'intact'
+                        ? 'rounded border border-emerald-500/40 bg-emerald-500/10 p-2'
+                        : 'rounded border border-rose-500/40 bg-rose-500/10 p-2'
+                    }
+                  >
+                    <p
+                      className={
+                        check.status === 'intact'
+                          ? 'text-xs font-medium text-emerald-300'
+                          : 'text-xs font-medium text-rose-300'
+                      }
+                    >
+                      {check.status === 'intact'
+                        ? 'Instantané intact'
+                        : check.status === 'altered'
+                          ? 'Contenu modifié'
+                          : 'Fichier manquant'}
+                    </p>
+                    <p className="mt-0.5 text-xs text-[var(--color-muted)]">
+                      {check.message}
+                    </p>
+                    {check.expectedHash && check.actualHash && (
+                      <div className="mt-1 flex flex-col gap-0.5 text-[10px] text-[var(--color-muted)]">
+                        <span>Attendu : {check.expectedHash}</span>
+                        <span>Obtenu : {check.actualHash}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </Panel>

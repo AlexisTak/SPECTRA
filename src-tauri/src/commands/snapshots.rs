@@ -1,12 +1,18 @@
-//! Snapshots commands module
+//! Instantanés d'un dossier.
 //!
-//! Manages case snapshots with hash verification.
+//! Un instantané capture **l'état complet** du dossier : métadonnées, sujets,
+//! preuves, événements. Le tout est sérialisé, haché, stocké dans un fichier.
+//!
+//! # Garantie probatoire
+//!
+//! L'empreinte SHA-256 porte sur le contenu capturé, pas sur une déclaration de
+//! l'appelant. Vérifier un instantané, c'est recalculer l'empreinte sur le
+//! fichier stocké et comparer.
 
 use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use tauri::command;
-use crate::database::{generate_uuid, AppState};
-use crate::database::sha256_hash;
+use crate::database::{generate_uuid, AppState, sha256_hash_bytes};
 use chrono::Utc;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -37,6 +43,7 @@ pub struct SnapshotContent {
     pub metadata: Option<serde_json::Value>,
 }
 
+/// Métadonnées renvoyées après création.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SnapshotMetadata {
@@ -44,6 +51,7 @@ pub struct SnapshotMetadata {
     pub case_id: String,
     pub nom: String,
     pub description: Option<String>,
+    /// Empreinte du **contenu capturé**, pas d'une déclaration.
     pub hash_sha256: String,
     pub taille: Option<i64>,
     pub created_at: String,
@@ -62,109 +70,166 @@ pub struct CreateSnapshotInput {
 // TAKE SNAPSHOT
 // =============================================================================
 
+/// Capture l'état complet d'un dossier dans un fichier chiffrable.
+///
+/// L'instantané contient : métadonnées du dossier, sujets, preuves, événements.
+/// Le fichier est stocké dans le magasin de preuves, et son empreinte SHA-256
+/// est calculée sur le contenu sérialisé — pas sur une déclaration de l'appelant.
 #[command]
 pub async fn take_snapshot(
     state: tauri::State<'_, AppState>,
     input: CreateSnapshotInput,
 ) -> AppResult<SnapshotMetadata> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
     let id = generate_uuid();
 
-    // Check case exists
-    let case_exists: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM cases WHERE id = ?",
-        rusqlite::params![input.case_id],
-        |row| row.get(0),
-    )?;
-    if case_exists == 0 {
-        return Err(AppError::msg(format!("Case not found: {}", input.case_id)));
-    }
+    // Vérifie que le dossier existe et récupère ses métadonnées
+    let case_meta: Option<(String, String, Option<String>)> = conn
+        .query_row(
+            "SELECT reference, titre, description FROM cases WHERE id = ?",
+            rusqlite::params![&input.case_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .ok();
 
-    // Get the latest snapshot hash for chaining
-    let hash_precedent: Option<String> = conn.query_row(
-        "SELECT hashSha256 FROM snapshots WHERE caseId = ? ORDER BY created_at DESC LIMIT 1",
-        rusqlite::params![input.case_id],
-        |row| row.get(0),
-    ).ok();
+    let Some((reference, titre, description)) = case_meta else {
+        return Err(AppError::msg(format!("Dossier introuvable : {}", input.case_id)));
+    };
 
-    // Create combined JSON for hashing
-    let snapshot_data = serde_json::json!({
-        "id": id,
-        "case_id": input.case_id,
-        "nom": input.nom,
-        "description": input.description,
-        "timestamp": now,
-        "metadata": input.metadata
+    // Capture des sujets
+    let subjects: Vec<serde_json::Value> = conn
+        .prepare(
+            "SELECT id, nom, prenom, statut, dateNaissance, lieuNaissance, nationalite, telephone, email, adresse, description \
+             FROM subjects WHERE caseId = ? ORDER BY id",
+        )?
+        .query_map(rusqlite::params![&input.case_id], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, String>(0)?,
+                "nom": row.get::<_, Option<String>>(1)?,
+                "prenom": row.get::<_, Option<String>>(2)?,
+                "statut": row.get::<_, String>(3)?,
+                "date_naissance": row.get::<_, Option<String>>(4)?,
+                "lieu_naissance": row.get::<_, Option<String>>(5)?,
+                "nationalite": row.get::<_, Option<String>>(6)?,
+                "telephone": row.get::<_, Option<String>>(7)?,
+                "email": row.get::<_, Option<String>>(8)?,
+                "adresse": row.get::<_, Option<String>>(9)?,
+                "description": row.get::<_, Option<String>>(10)?,
+            }))
+        })?
+        .filter_map(Result::ok)
+        .collect();
+
+    // Capture des preuves (seulement métadonnées, pas le contenu des fichiers)
+    let evidence: Vec<serde_json::Value> = conn
+        .prepare(
+            "SELECT id, type, nom, description, hash_sha256, taille, dateAjout, statut \
+             FROM evidence WHERE caseId = ? ORDER BY id",
+        )?
+        .query_map(rusqlite::params![&input.case_id], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, String>(0)?,
+                "type": row.get::<_, String>(1)?,
+                "nom": row.get::<_, Option<String>>(2)?,
+                "description": row.get::<_, Option<String>>(3)?,
+                "hash_sha256": row.get::<_, Option<String>>(4)?,
+                "taille": row.get::<_, Option<i64>>(5)?,
+                "date_ajout": row.get::<_, String>(6)?,
+                "statut": row.get::<_, String>(7)?,
+            }))
+        })?
+        .filter_map(Result::ok)
+        .collect();
+
+    // Capture des événements du dossier
+    let events: Vec<serde_json::Value> = conn
+        .prepare(
+            "SELECT id, type, titre, description, timestamp, actor \
+             FROM case_events WHERE caseId = ? ORDER BY timestamp",
+        )?
+        .query_map(rusqlite::params![&input.case_id], |row| {
+            Ok(serde_json::json!({
+                "id": row.get::<_, String>(0)?,
+                "type": row.get::<_, String>(1)?,
+                "titre": row.get::<_, Option<String>>(2)?,
+                "description": row.get::<_, Option<String>>(3)?,
+                "timestamp": row.get::<_, String>(4)?,
+                "actor": row.get::<_, Option<String>>(5)?,
+            }))
+        })?
+        .filter_map(Result::ok)
+        .collect();
+
+    // Sérialisation complète
+    let snapshot_content = serde_json::json!({
+        "id": &id,
+        "case_id": &input.case_id,
+        "reference": &reference,
+        "titre": &titre,
+        "description": &description,
+        "nom": &input.nom,
+        "description_snapshot": &input.description,
+        "timestamp": &now,
+        "subjects": subjects,
+        "evidence": evidence,
+        "events": events,
     });
-    let json_str = serde_json::to_string(&snapshot_data)?;
-    let hash = sha256_hash(&json_str);
 
+    let json_bytes = serde_json::to_vec(&snapshot_content)?;
+    let hash_bytes = sha256_hash_bytes(&json_bytes);
+
+    // Stockage dans le magasin
+    let shard = &id[..2];
+    let dest_dir = state.storage_root().join("snapshots").join(shard);
+    std::fs::create_dir_all(&dest_dir)
+        .map_err(|e| AppError::msg(format!("Magasin inaccessible : {e}")))?;
+
+    let dest_path = dest_dir.join(format!("{id}.json"));
+    std::fs::write(&dest_path, &json_bytes)
+        .map_err(|e| AppError::msg(format!("Écriture impossible : {e}")))?;
+
+    // Chaînage avec le précédent instantané
+    let hash_precedent: Option<String> = conn
+        .query_row(
+            "SELECT hashSha256 FROM snapshots WHERE caseId = ? ORDER BY created_at DESC LIMIT 1",
+            rusqlite::params![&input.case_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    // Enregistrement en base
     conn.execute(
-        "INSERT INTO snapshots (id, caseId, nom, description, hashSha256, hashPrecedent, taille, chemin, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO snapshots (id, caseId, nom, description, hashSha256, hashPrecedent, taille, chemin, metadata) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         rusqlite::params![
             &id,
             &input.case_id,
             &input.nom,
             &input.description,
-            &hash,
+            &hash_bytes,
             &hash_precedent,
-            json_str.len() as i64,
-            "NULL",
+            &(json_bytes.len() as i64),
+            &dest_path.to_string_lossy().to_string(),
             &input.metadata,
         ],
     )?;
 
-    // Récupère le dernier hash d'audit pour ce dossier (chaînage).
-    let previous_hash: Option<String> = conn
-        .query_row(
-            "SELECT imma FROM audit_events WHERE caseId = ? ORDER BY timestamp DESC LIMIT 1",
-            rusqlite::params![&input.case_id],
-            |row| row.get(0),
-        )
-        .ok();
-    let previous_hash = previous_hash.unwrap_or_default();
-
-    // Construit l'événement d'audit et calcule son hash chaîné.
-    let audit_event = spectra_audit::AuditEvent {
-        id: crate::database::generate_uuid(),
-        case_id: input.case_id.clone(),
-        action: "snapshot".to_string(),
-        entity_kind: "snapshot".to_string(),
-        entity_id: Some(id.clone()),
-        actor: "system".to_string(),
-        sequence: 1,
-        payload: serde_json::json!({"nom": input.nom, "description": input.description}),
-    };
-    let link = spectra_audit::compute_link(&audit_event, &previous_hash);
-
-    conn.execute(
-        "INSERT INTO audit_events (id, caseId, action, entityKind, entityId, imma, imma_precedent, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        rusqlite::params![
-            &audit_event.id,
-            &input.case_id,
-            &audit_event.action,
-            &audit_event.entity_kind,
-            &audit_event.entity_id,
-            &link.hash,
-            &link.previous_hash,
-            &serde_json::to_string(&audit_event.payload)?,
-        ],
-    )?;
-
-    // Add case event
-    conn.execute(
-        "INSERT INTO case_events (id, caseId, type, titre, description, timestamp, actor, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        rusqlite::params![
-            &crate::database::generate_uuid(),
-            &input.case_id,
-            "snapshot_taken",
-            &format!("Snapshot: {}", input.nom),
-            &format!("Created snapshot {}", id),
-            &now,
-            "system",
-            &serde_json::json!({"snapshot_id": id}),
-        ],
+    // Audit chaîné
+    crate::database::append_audit_event(
+        &conn,
+        &input.case_id,
+        "snapshot",
+        "snapshot",
+        Some(&id),
+        "system",
+        serde_json::json!({
+            "nom": input.nom,
+            "sujets": subjects.len(),
+            "preuves": evidence.len(),
+            "evenements": events.len(),
+            "sha256": hash_bytes,
+        }),
     )?;
 
     Ok(SnapshotMetadata {
@@ -172,8 +237,8 @@ pub async fn take_snapshot(
         case_id: input.case_id,
         nom: input.nom,
         description: input.description,
-        hash_sha256: hash,
-        taille: Some(json_str.len() as i64),
+        hash_sha256: hash_bytes,
+        taille: Some(json_bytes.len() as i64),
         created_at: now,
     })
 }
@@ -187,24 +252,25 @@ pub async fn list_snapshots(
     state: tauri::State<'_, AppState>,
     case_id: String,
 ) -> AppResult<Vec<SnapshotMetadata>> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
-    let mut stmt = conn.prepare("SELECT id, caseId, nom, description, hashSha256, taille, created_at FROM snapshots WHERE caseId = ? ORDER BY created_at DESC")?;
+    let snapshots = conn
+        .prepare("SELECT id, caseId, nom, description, hashSha256, taille, created_at FROM snapshots WHERE caseId = ? ORDER BY created_at DESC")?
+        .query_map(rusqlite::params![case_id], |row| {
+            Ok(SnapshotMetadata {
+                id: row.get(0)?,
+                case_id: row.get(1)?,
+                nom: row.get(2)?,
+                description: row.get(3)?,
+                hash_sha256: row.get(4)?,
+                taille: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        })?
+        .filter_map(Result::ok)
+        .collect();
 
-    let snapshots = stmt.query_map(rusqlite::params![case_id], |row| {
-        Ok(SnapshotMetadata {
-            id: row.get(0)?,
-            case_id: row.get(1)?,
-            nom: row.get(2)?,
-            description: row.get(3)?,
-            hash_sha256: row.get(4)?,
-            taille: row.get(5)?,
-            created_at: row.get(6)?,
-        })
-    })?;
-
-    let result: Result<Vec<_>, _> = snapshots.collect();
-    Ok(result?)
+    Ok(snapshots)
 }
 
 // =============================================================================
@@ -216,45 +282,48 @@ pub async fn get_snapshot(
     state: tauri::State<'_, AppState>,
     id: String,
 ) -> AppResult<Option<Snapshot>> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
-    // Get snapshot metadata
-    let mut stmt = conn.prepare("SELECT id, caseId, nom, description, hashSha256, hashPrecedent, taille, chemin, metadata FROM snapshots WHERE id = ?")?;
-    let snapshot_meta = stmt.query_row(rusqlite::params![id], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-            row.get::<_, Option<String>>(3)?,
-            row.get::<_, String>(4)?,
-            row.get::<_, Option<String>>(5)?,
-            row.get::<_, Option<i64>>(6)?,
-            row.get::<_, Option<String>>(7)?,
-            row.get::<_, Option<serde_json::Value>>(8)?,
-        ))
-    }).ok();
+    let snapshot_meta: Option<(String, String, String, Option<String>, String, Option<String>, Option<i64>, Option<String>, Option<serde_json::Value>)> = conn
+        .query_row(
+            "SELECT id, caseId, nom, description, hashSha256, hashPrecedent, taille, chemin, metadata FROM snapshots WHERE id = ?",
+            rusqlite::params![&id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                ))
+            },
+        )
+        .ok();
 
-    let (id, case_id, nom, description, hash_sha256, hash_precedent, taille, chemin, metadata) = match snapshot_meta {
-        Some(m) => m,
-        None => return Ok(None),
+    let Some((id, case_id, nom, description, hash_sha256, hash_precedent, taille, chemin, metadata)) = snapshot_meta else {
+        return Ok(None);
     };
 
-    // Get contents
-    let mut contents_stmt = conn.prepare("SELECT id, nom, kind, contenu, chemin, hashSha256, metadata FROM snapshot_contents WHERE snapshotId = ?")?;
-    let contents = contents_stmt.query_map(rusqlite::params![id], |row| {
-        Ok(SnapshotContent {
-            id: row.get(0)?,
-            snapshot_id: id.clone(),
-            nom: row.get(1)?,
-            kind: row.get(2)?,
-            contenu: row.get(3)?,
-            chemin: row.get(4)?,
-            hash_sha256: row.get(5)?,
-            metadata: row.get(6)?,
-        })
-    })?;
-
-    let contents: Result<Vec<_>, _> = contents.collect();
+    let contents: Vec<SnapshotContent> = conn
+        .prepare("SELECT id, nom, kind, contenu, chemin, hashSha256, metadata FROM snapshot_contents WHERE snapshotId = ?")?
+        .query_map(rusqlite::params![&id], |row| {
+            Ok(SnapshotContent {
+                id: row.get(0)?,
+                snapshot_id: id.clone(),
+                nom: row.get(1)?,
+                kind: row.get(2)?,
+                contenu: row.get(3)?,
+                chemin: row.get(4)?,
+                hash_sha256: row.get(5)?,
+                metadata: row.get(6)?,
+            })
+        })?
+        .filter_map(Result::ok)
+        .collect();
 
     Ok(Some(Snapshot {
         id,
@@ -266,7 +335,7 @@ pub async fn get_snapshot(
         taille,
         chemin,
         metadata,
-        contents: contents.ok(),
+        contents: Some(contents),
     }))
 }
 
@@ -274,34 +343,58 @@ pub async fn get_snapshot(
 // VERIFY SNAPSHOT INTEGRITY
 // =============================================================================
 
+/// Vérifie l'intégrité d'un instantané en recalculant l'empreinte sur le fichier.
 #[command]
 pub async fn verify_snapshot_integrity(
     state: tauri::State<'_, AppState>,
     id: String,
 ) -> AppResult<serde_json::Value> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
-    // Get snapshot
-    let mut stmt = conn.prepare("SELECT hashSha256, hashPrecedent FROM snapshots WHERE id = ?")?;
-    let (hash, hash_precedent): (String, Option<String>) = stmt.query_row(rusqlite::params![id], |row| {
-        Ok((row.get(0)?, row.get(1)?))
-    })?;
+    let (expected_hash, chemin): (String, Option<String>) = conn
+        .query_row(
+            "SELECT hashSha256, chemin FROM snapshots WHERE id = ?",
+            rusqlite::params![&id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
 
-    // Verify current hash
-    let current_valid = !hash.is_empty();
-
-    // Verify chain integrity
-    let chain_valid = match hash_precedent {
-        Some(prev_hash) => !prev_hash.is_empty(),
-        None => true, // First snapshot, no chain to verify
+    let Some(chemin) = chemin else {
+        return Ok(serde_json::json!({
+            "snapshot_id": id,
+            "status": "missing",
+            "message": "aucun fichier associé",
+            "verified_at": Utc::now().to_rfc3339()
+        }));
     };
 
-    Ok(serde_json::json!({
-        "snapshot_id": id,
-        "hash_valid": current_valid,
-        "chain_valid": chain_valid,
-        "verified_at": Utc::now().to_rfc3339()
-    }))
+    let Ok(bytes) = std::fs::read(&chemin) else {
+        return Ok(serde_json::json!({
+            "snapshot_id": id,
+            "status": "missing",
+            "message": "fichier illisible",
+            "verified_at": Utc::now().to_rfc3339()
+        }));
+    };
+
+    let actual_hash = sha256_hash_bytes(&bytes);
+
+    if actual_hash == expected_hash {
+        Ok(serde_json::json!({
+            "snapshot_id": id,
+            "status": "intact",
+            "message": "empreinte recalculée conforme",
+            "verified_at": Utc::now().to_rfc3339()
+        }))
+    } else {
+        Ok(serde_json::json!({
+            "snapshot_id": id,
+            "status": "altered",
+            "expected_hash": expected_hash,
+            "actual_hash": actual_hash,
+            "message": "empreinte différente : contenu modifié",
+            "verified_at": Utc::now().to_rfc3339()
+        }))
+    }
 }
 
 // =============================================================================
@@ -313,73 +406,33 @@ pub async fn delete_snapshot(
     state: tauri::State<'_, AppState>,
     id: String,
 ) -> AppResult<()> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
-    // Get snapshot case_id before delete
-    let case_id: String = conn.query_row(
-        "SELECT caseId FROM snapshots WHERE id = ?",
-        rusqlite::params![id],
-        |row| row.get(0),
-    )?;
+    let case_id: String = conn
+        .query_row("SELECT caseId FROM snapshots WHERE id = ?", rusqlite::params![&id], |row| row.get(0))?;
 
-    // Récupère le dernier hash d'audit pour ce dossier (chaînage).
-    let previous_hash: Option<String> = conn
-        .query_row(
-            "SELECT imma FROM audit_events WHERE caseId = ? ORDER BY timestamp DESC LIMIT 1",
-            rusqlite::params![&case_id],
-            |row| row.get(0),
-        )
+    // Supprime le fichier du magasin
+    let chemin: Option<String> = conn
+        .query_row("SELECT chemin FROM snapshots WHERE id = ?", rusqlite::params![&id], |row| row.get(0))
         .ok();
-    let previous_hash = previous_hash.unwrap_or_default();
 
-    // Construit l'événement d'audit et calcule son hash chaîné.
-    let audit_event = spectra_audit::AuditEvent {
-        id: crate::database::generate_uuid(),
-        case_id: case_id.clone(),
-        action: "delete".to_string(),
-        entity_kind: "snapshot".to_string(),
-        entity_id: Some(id.clone()),
-        actor: "system".to_string(),
-        sequence: 1,
-        payload: serde_json::json!({}),
-    };
-    let link = spectra_audit::compute_link(&audit_event, &previous_hash);
-
-    conn.execute(
-        "INSERT INTO audit_events (id, caseId, action, entityKind, entityId, imma, imma_precedent, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        rusqlite::params![
-            &audit_event.id,
-            &case_id,
-            &audit_event.action,
-            &audit_event.entity_kind,
-            &audit_event.entity_id,
-            &link.hash,
-            &link.previous_hash,
-            &serde_json::to_string(&audit_event.payload)?,
-        ],
-    )?;
-
-    // Check snapshot exists
-    let exists: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM snapshots WHERE id = ?",
-        rusqlite::params![id],
-        |row| row.get(0),
-    )?;
-    if exists == 0 {
-        return Err(AppError::msg(format!("Snapshot not found: {}", id)));
+    if let Some(chemin) = &chemin {
+        let _ = std::fs::remove_file(chemin);
     }
 
-    // Delete contents first
-    conn.execute(
-        "DELETE FROM snapshot_contents WHERE snapshotId = ?",
-        rusqlite::params![id],
+    // Audit
+    crate::database::append_audit_event(
+        &conn,
+        &case_id,
+        "delete",
+        "snapshot",
+        Some(&id),
+        "system",
+        serde_json::json!({"chemin": chemin}),
     )?;
 
-    // Delete snapshot
-    conn.execute(
-        "DELETE FROM snapshots WHERE id = ?",
-        rusqlite::params![id],
-    )?;
+    conn.execute("DELETE FROM snapshot_contents WHERE snapshotId = ?", rusqlite::params![&id])?;
+    conn.execute("DELETE FROM snapshots WHERE id = ?", rusqlite::params![&id])?;
 
     Ok(())
 }
@@ -393,8 +446,6 @@ pub async fn load_snapshot_bundle(
     state: tauri::State<'_, AppState>,
     id: String,
 ) -> AppResult<Option<serde_json::Value>> {
-    // Ne pas prendre le verrou ici : `get_snapshot` le prend lui-même, et ce
-    // mutex n.est pas réentrant (`audit.md`, P2-8).
     let snapshot = get_snapshot(state, id).await?;
 
     Ok(snapshot.map(|s| {

@@ -318,6 +318,15 @@ export const takeSnapshot = (input: {
 export const deleteSnapshot = (id: string): Promise<void> =>
   tauriInvoke<void>('delete_snapshot', { id })
 
+export const verifySnapshotIntegrity = (
+  id: string,
+): Promise<{
+  status: string
+  message: string
+  expected_hash?: string
+  actual_hash?: string
+}> => tauriInvoke('verify_snapshot_integrity', { id })
+
 // ---------------------------------------------------------------------------
 // Rapports
 // ---------------------------------------------------------------------------
