@@ -44,26 +44,36 @@ import type {
 import type { AiSettings } from '@/lib/ai-settings'
 import type { Qualification } from '@/lib/claims-types'
 
-const isTauri =
+import { invoke } from '@tauri-apps/api/core'
+
+/** Vrai uniquement dans une fenêtre Tauri (pas en SSR, pas en navigateur nu). */
+export const isTauri = (): boolean =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
 /**
- * Helper central : `invoke()` avec garde-fou Tauri.
- * Throw une erreur claire si on est en browser/test/SSR.
+ * Point de passage unique vers le backend Rust.
+ *
+ * Utilise l'API publique `@tauri-apps/api/core` plutôt que
+ * `window.__TAURI_INTERNALS__` : cette dernière est un détail d'implémentation
+ * interne, non typé, susceptible de changer entre versions mineures.
+ *
+ * Aucun repli silencieux (`audit.md`, P3-10) : hors contexte Tauri, on lève.
+ * Renvoyer une valeur par défaut ferait croire à l'appelant que le backend a
+ * répondu, ce qui est précisément le défaut le plus dangereux pour un outil
+ * probatoire.
  */
 export async function tauriInvoke<T = unknown>(
   command: string,
   args?: Record<string, unknown>,
 ): Promise<T> {
-  if (!isTauri) {
+  if (!isTauri()) {
     throw new Error(
-      `[Tauri Bridge] invoke('${command}') appelé hors contexte Tauri. ` +
-        'Lancer `npx tauri dev` ou vérifier que window.__TAURI_INTERNALS__ est défini.',
+      `invoke('${command}') appelé hors contexte Tauri. ` +
+        'Lancer `npm run tauri:dev` — les commandes backend ne sont pas ' +
+        'disponibles dans un navigateur ordinaire.',
     )
   }
-  // invoke would be Tauri's invoke function in production
-  // @ts-ignore - invoke is defined by Tauri runtime
-  return (window as any).__TAURI_INTERNALS__.invoke(command, args)
+  return invoke<T>(command, args)
 }
 
 // =============================================================================

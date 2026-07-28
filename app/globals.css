@@ -1,0 +1,21 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-surface: #0b1120;
+  --color-panel: #0f172a;
+  --color-edge: #1e293b;
+  --color-ink: #e2e8f0;
+  --color-muted: #94a3b8;
+  --color-accent: #38bdf8;
+  --color-ok: #4ade80;
+  --color-warn: #fbbf24;
+  --color-danger: #f87171;
+}
+
+html,
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  /* Mode sombre par défaut (CLAUDE.md §6). */
+  color-scheme: dark;
+}
