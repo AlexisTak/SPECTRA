@@ -28,6 +28,7 @@ import {
 import { useAsync } from '@/lib/hooks/useCases'
 import { EvidencePanel } from '@/components/evidence/evidence-panel'
 import { SnapshotsPanel } from '@/components/snapshots/snapshots-panel'
+import { ClaimsPanel } from '@/components/claims/claims-panel'
 import { PageHeader } from '@/components/layout/shell'
 import {
   Badge,
@@ -123,6 +124,7 @@ function CaseDetail() {
           )}
 
           <SubjectsPanel caseId={id} />
+          <ClaimsPanel caseId={id} />
           <EvidencePanel caseId={id} />
           <JournalPanel caseId={id} />
         </div>
