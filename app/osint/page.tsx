@@ -16,6 +16,7 @@
  */
 
 import { useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { PageHeader } from '@/components/layout/shell'
 import {
   Badge,
@@ -37,6 +38,18 @@ interface ProbeResult {
   reason?: string
 }
 
+interface RawProbeResult {
+  site: string
+  outcome: {
+    exists?: { url: string | null }
+    missing?: null
+    blocked?: { reason: string }
+    indeterminate?: { reason: string }
+    error?: { message: string }
+  }
+  elapsed_ms: number
+}
+
 export default function OsintPage() {
   const [selectorType, setSelectorType] = useState<SelectorKind>('username')
   const [selector, setSelector] = useState('')
@@ -53,11 +66,36 @@ export default function OsintPage() {
     setProgress({ current: 0, total: 0 })
 
     try {
-      // Simulation — le backend Rust sera appelé via Tauri
-      // Pour l'instant, on simule des résultats
-      const mockResults = generateMockResults(selector, selectorType)
-      setProgress({ current: mockResults.length, total: mockResults.length })
-      setResults(mockResults)
+      const raw = await invoke<string>('run_osint_campaign', {
+        selector,
+        kind: selectorType,
+      })
+      const parsed: RawProbeResult[] = JSON.parse(raw)
+
+      setProgress({ current: parsed.length, total: parsed.length })
+      setResults(
+        parsed.map((r) => {
+          let outcome: ProbeOutcome = 'missing'
+          let url: string | undefined
+          let reason: string | undefined
+
+          if (r.outcome.exists) {
+            outcome = 'exists'
+            url = r.outcome.exists.url || undefined
+          } else if (r.outcome.blocked) {
+            outcome = 'blocked'
+            reason = r.outcome.blocked.reason
+          } else if (r.outcome.indeterminate) {
+            outcome = 'indeterminate'
+            reason = r.outcome.indeterminate.reason
+          } else if (r.outcome.error) {
+            outcome = 'error'
+            reason = r.outcome.error.message
+          }
+
+          return { site: r.site, outcome, url, reason }
+        }),
+      )
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -66,10 +104,10 @@ export default function OsintPage() {
   }
 
   const stats = {
-    found: results.filter(r => r.outcome === 'exists').length,
-    missing: results.filter(r => r.outcome === 'missing').length,
-    blocked: results.filter(r => r.outcome === 'blocked').length,
-    indeterminate: results.filter(r => r.outcome === 'indeterminate').length,
+    found: results.filter((r) => r.outcome === 'exists').length,
+    missing: results.filter((r) => r.outcome === 'missing').length,
+    blocked: results.filter((r) => r.outcome === 'blocked').length,
+    indeterminate: results.filter((r) => r.outcome === 'indeterminate').length,
   }
 
   return (
@@ -99,12 +137,22 @@ export default function OsintPage() {
 
             <div className="flex flex-1 flex-col gap-1.5">
               <span className="text-xs font-medium text-[var(--color-muted)]">
-                {selectorType === 'username' ? 'Pseudo à rechercher' : selectorType === 'email' ? 'Email à rechercher' : 'Téléphone à rechercher'}
+                {selectorType === 'username'
+                  ? 'Pseudo à rechercher'
+                  : selectorType === 'email'
+                    ? 'Email à rechercher'
+                    : 'Téléphone à rechercher'}
               </span>
               <Input
                 value={selector}
                 onChange={(e) => setSelector(e.target.value)}
-                placeholder={selectorType === 'username' ? 'ex: johndoe' : selectorType === 'email' ? 'ex: john@example.com' : 'ex: +33612345678'}
+                placeholder={
+                  selectorType === 'username'
+                    ? 'ex: johndoe'
+                    : selectorType === 'email'
+                      ? 'ex: john@example.com'
+                      : 'ex: +33612345678'
+                }
                 onKeyDown={(e) => e.key === 'Enter' && !running && runCampaign()}
               />
             </div>
@@ -129,7 +177,10 @@ export default function OsintPage() {
                 <div
                   className="h-2 rounded-full bg-[var(--color-accent)] transition-all"
                   style={{
-                    width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%`,
+                    width:
+                      progress.total > 0
+                        ? (progress.current / progress.total) * 100
+                        : 0,
                   }}
                 />
               </div>
@@ -208,29 +259,6 @@ export default function OsintPage() {
       </div>
     </>
   )
-}
-
-function generateMockResults(selector: string, type: SelectorKind): ProbeResult[] {
-  // Simulation de résultats — sera remplacé par l'appel Tauri au moteur Rust
-  const sites = [
-    'GitHub', 'Twitter', 'Instagram', 'Reddit', 'TikTok',
-    'Facebook', 'LinkedIn', 'Pinterest', 'Snapchat', 'YouTube',
-  ]
-
-  return sites.map((site, i) => {
-    const rand = Math.random()
-    let outcome: ProbeOutcome = 'missing'
-    if (rand > 0.7) outcome = 'exists'
-    else if (rand > 0.6) outcome = 'blocked'
-    else if (rand > 0.5) outcome = 'indeterminate'
-
-    return {
-      site,
-      outcome,
-      url: outcome === 'exists' ? `https://${site.toLowerCase()}.com/${selector}` : undefined,
-      reason: outcome === 'blocked' ? 'Cloudflare detected' : undefined,
-    }
-  })
 }
 
 function OutcomeBadge({ outcome }: { outcome: ProbeOutcome }) {

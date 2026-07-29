@@ -84,6 +84,9 @@ pub fn run() {
             commands::get_report_contents,
             commands::add_report_timeline_event,
             commands::get_report_timeline,
+            commands::run_osint_campaign,
+            commands::load_osint_probes,
+            commands::update_osint_datasets,
         ])
         .run(tauri::generate_context!())
         .expect("erreur au démarrage de l'application Tauri");
