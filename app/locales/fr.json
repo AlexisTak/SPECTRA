@@ -2,16 +2,24 @@
   "app": {
     "name": "SPECTRA",
     "tagline": "Investigation locale",
-    "footer": "Données locales uniquement"
+    "footer": "Données locales uniquement",
+    "version": "Version"
   },
   "nav": {
     "dashboard": "Tableau de bord",
     "cases": "Dossiers",
     "osint": "OSINT",
     "graph": "Graphe",
+    "timeline": "Timeline",
+    "table": "Table",
+    "map": "Carte",
+    "notes": "Notes",
+    "ach": "ACH",
+    "ai": "IA",
     "search": "Recherche",
     "reports": "Rapports",
     "integrity": "Intégrité",
+    "settings": "Paramètres",
     "new": "Nouveau"
   },
   "common": {
@@ -29,11 +37,100 @@
     "all": "Tous",
     "none": "Aucun",
     "yes": "Oui",
-    "no": "Non"
+    "no": "Non",
+    "back": "Retour",
+    "next": "Suivant",
+    "submit": "Soumettre",
+    "copy": "Copier",
+    "export": "Exporter",
+    "import": "Importer",
+    "refresh": "Rafraîchir",
+    "details": "Détails",
+    "actions": "Actions",
+    "status": "Statut",
+    "date": "Date",
+    "name": "Nom",
+    "description": "Description",
+    "type": "Type",
+    "source": "Source",
+    "confidence": "Confiance",
+    "provenance": "Provenance",
+    "inferred": "INFERRED",
+    "offline": "Hors ligne",
+    "online": "En ligne"
+  },
+  "ai": {
+    "title": "IA locale",
+    "subtitle": "Outils d'analyse augmentée — 100 % offline",
+    "status": {
+      "available": "Disponible",
+      "unavailable": "Indisponible",
+      "backend": "Backend",
+      "model": "Modèle",
+      "detecting": "Détection en cours…"
+    },
+    "tabs": {
+      "status": "Statut",
+      "summarize": "Résumé",
+      "ner": "NER",
+      "pivots": "Pivots",
+      "duplicates": "Doublons",
+      "rag": "RAG"
+    },
+    "summarize": {
+      "placeholder": "Collez le texte à résumer…",
+      "action": "Résumer"
+    },
+    "ner": {
+      "caseIdPlaceholder": "ID du dossier (caseId)",
+      "textPlaceholder": "Texte libre à analyser…",
+      "action": "Extraire"
+    },
+    "pivots": {
+      "entityIdPlaceholder": "ID entité",
+      "labelPlaceholder": "Label affiché",
+      "valuePlaceholder": "Valeur canonique",
+      "contextPlaceholder": "Contexte optionnel…",
+      "action": "Suggérer"
+    },
+    "duplicates": {
+      "entitiesPlaceholder": "Format : id|kind|label|value",
+      "thresholdLabel": "Seuil",
+      "action": "Détecter"
+    },
+    "rag": {
+      "questionPlaceholder": "Question…",
+      "chunksPlaceholder": "Documents (séparés par \\n---\\n)…",
+      "action": "Interroger",
+      "sources": "Sources utilisées"
+    },
+    "warning": "Toute sortie IA est marquée INFERRED et exclue des rapports par défaut. Les résultats nécessitent une validation humaine.",
+    "unavailableToast": "IA indisponible — installez Ollama et lancez-le."
   },
   "commandPalette": {
     "title": "Palette de commandes",
     "placeholder": "Tapez une commande ou recherchez…",
-    "shortcut": "Ctrl+K"
+    "shortcut": "Ctrl+K",
+    "noResults": "Aucun résultat",
+    "footer": "↑↓ pour naviguer · ↵ pour valider · Esc pour fermer"
+  },
+  "shortcuts": {
+    "title": "Raccourcis clavier",
+    "global": "Globaux",
+    "navigation": "Navigation",
+    "graph": "Graphe",
+    "openPalette": "Ouvrir la palette",
+    "closeModal": "Fermer la modale",
+    "focusSearch": "Focus recherche",
+    "newCase": "Nouveau dossier",
+    "save": "Enregistrer",
+    "undo": "Annuler",
+    "redo": "Rétablir",
+    "selectAll": "Tout sélectionner",
+    "deleteSelection": "Supprimer la sélection",
+    "zoomIn": "Zoom avant",
+    "zoomOut": "Zoom arrière",
+    "fitView": "Ajuster la vue",
+    "toggleLabels": "Afficher/masquer les labels"
   }
 }

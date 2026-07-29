@@ -2,6 +2,12 @@
 
 /**
  * Coquille applicative : barre latérale de navigation et zone de contenu.
+ *
+ * Accessibilité :
+ * - Lien d'évitement (skip-link) pour lecteurs d'écran
+ * - aria-current="page" sur l'élément actif
+ * - aria-label sur la navigation principale
+ * - Contraste AA garanti par la palette sombre
  */
 
 import Link from 'next/link'
@@ -35,9 +41,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
+      {/* Lien d'évitement pour lecteurs d'écran */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded focus:bg-sky-500 focus:px-4 focus:py-2 focus:text-white"
+      >
+        Aller au contenu principal
+      </a>
+
       <aside className="flex w-56 shrink-0 flex-col border-r border-[var(--color-edge)] bg-[var(--color-panel)]">
         <div className="border-b border-[var(--color-edge)] px-5 py-4">
-          <Link href="/" className="block">
+          <Link href="/" className="block" aria-label={`${t('app.name')} — ${t('app.tagline')}`}>
             <p className="text-sm font-semibold tracking-tight">{t('app.name')}</p>
             <p className="text-xs text-[var(--color-muted)]">
               {t('app.tagline')}
@@ -45,7 +59,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
 
-        <nav className="flex flex-col gap-0.5 p-3">
+        <nav aria-label="Navigation principale" className="flex flex-col gap-0.5 p-3">
           {NAV.map((item) => {
             const active =
               item.href === '/'
@@ -55,6 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
                   'relative flex items-center justify-between rounded px-3 py-2 text-sm transition-colors',
                   active
@@ -78,10 +93,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p className="text-xs text-[var(--color-muted)]">
             {t('app.footer')}
           </p>
+          <div className="mt-2 flex items-center gap-2 text-[10px] text-[var(--color-muted)]">
+            <kbd className="rounded border border-[var(--color-edge)] bg-[var(--color-surface)] px-1 py-0.5">Ctrl+K</kbd>
+            <span>Palette</span>
+          </div>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-x-hidden">{children}</main>
+      <main id="main-content" className="flex-1 overflow-x-hidden" tabIndex={-1}>
+        {children}
+      </main>
     </div>
   )
 }

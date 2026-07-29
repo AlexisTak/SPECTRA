@@ -2,16 +2,24 @@
   "app": {
     "name": "SPECTRA",
     "tagline": "Local investigation",
-    "footer": "Local data only"
+    "footer": "Local data only",
+    "version": "Version"
   },
   "nav": {
     "dashboard": "Dashboard",
     "cases": "Cases",
     "osint": "OSINT",
     "graph": "Graph",
+    "timeline": "Timeline",
+    "table": "Table",
+    "map": "Map",
+    "notes": "Notes",
+    "ach": "ACH",
+    "ai": "AI",
     "search": "Search",
     "reports": "Reports",
     "integrity": "Integrity",
+    "settings": "Settings",
     "new": "New"
   },
   "common": {
@@ -29,11 +37,100 @@
     "all": "All",
     "none": "None",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit",
+    "copy": "Copy",
+    "export": "Export",
+    "import": "Import",
+    "refresh": "Refresh",
+    "details": "Details",
+    "actions": "Actions",
+    "status": "Status",
+    "date": "Date",
+    "name": "Name",
+    "description": "Description",
+    "type": "Type",
+    "source": "Source",
+    "confidence": "Confidence",
+    "provenance": "Provenance",
+    "inferred": "INFERRED",
+    "offline": "Offline",
+    "online": "Online"
+  },
+  "ai": {
+    "title": "Local AI",
+    "subtitle": "Augmented analysis tools — 100 % offline",
+    "status": {
+      "available": "Available",
+      "unavailable": "Unavailable",
+      "backend": "Backend",
+      "model": "Model",
+      "detecting": "Detecting…"
+    },
+    "tabs": {
+      "status": "Status",
+      "summarize": "Summarize",
+      "ner": "NER",
+      "pivots": "Pivots",
+      "duplicates": "Duplicates",
+      "rag": "RAG"
+    },
+    "summarize": {
+      "placeholder": "Paste text to summarize…",
+      "action": "Summarize"
+    },
+    "ner": {
+      "caseIdPlaceholder": "Case ID",
+      "textPlaceholder": "Free text to analyze…",
+      "action": "Extract"
+    },
+    "pivots": {
+      "entityIdPlaceholder": "Entity ID",
+      "labelPlaceholder": "Display label",
+      "valuePlaceholder": "Canonical value",
+      "contextPlaceholder": "Optional context…",
+      "action": "Suggest"
+    },
+    "duplicates": {
+      "entitiesPlaceholder": "Format: id|kind|label|value",
+      "thresholdLabel": "Threshold",
+      "action": "Detect"
+    },
+    "rag": {
+      "questionPlaceholder": "Question…",
+      "chunksPlaceholder": "Documents (separated by \\n---\\n)…",
+      "action": "Query",
+      "sources": "Sources used"
+    },
+    "warning": "All AI output is marked INFERRED and excluded from reports by default. Results require human validation.",
+    "unavailableToast": "AI unavailable — install and run Ollama."
   },
   "commandPalette": {
     "title": "Command palette",
     "placeholder": "Type a command or search…",
-    "shortcut": "Ctrl+K"
+    "shortcut": "Ctrl+K",
+    "noResults": "No results",
+    "footer": "↑↓ to navigate · ↵ to validate · Esc to close"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "global": "Global",
+    "navigation": "Navigation",
+    "graph": "Graph",
+    "openPalette": "Open palette",
+    "closeModal": "Close modal",
+    "focusSearch": "Focus search",
+    "newCase": "New case",
+    "save": "Save",
+    "undo": "Undo",
+    "redo": "Redo",
+    "selectAll": "Select all",
+    "deleteSelection": "Delete selection",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fitView": "Fit view",
+    "toggleLabels": "Toggle labels"
   }
 }
