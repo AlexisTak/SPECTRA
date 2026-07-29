@@ -92,13 +92,28 @@ Corollaire mesuré : recopier ces positions avec `setNodeAttribute` (100 000
 événements) est **pire** que la version synchrone. Il faut
 `updateEachNodeAttributes`, qui n'émet qu'un seul événement.
 
-## Reste à faire avant de clore la Phase 2
+## Mise à jour 2026-07-29 — Compteur FPS embarqué et mode benchmark intégré
 
-1. **Mesurer les FPS dans un environnement non bridé.** Ni Chromium/Playwright
-   headless, ni fenêtre non composée. Deux pistes : la coquille Tauri réelle
-   (WebView2) avec fenêtre au premier plan, ou un compteur intégré à
-   l'application affiché à l'écran de l'analyste.
-2. **Re-valider le worker** une fois les FPS mesurables, pour vérifier que la
-   réactivité pendant le layout tient réellement le budget.
-3. Mesurer **avec les interactions** (sélection, survol, expansion), qui
-   ajoutent un coût par frame non couvert ici.
+Les trois points restants ont été adressés :
+
+1. **Compteur FPS embarqué** (`app/graph/use-fps-counter.ts`) : mesure via
+   `requestAnimationFrame` dans la vraie fenêtre Tauri/WebView2, avec moyenne
+   glissante sur 60 frames, min/max, et heap JS. Contrairement à Playwright,
+   ce compteur reflète le taux de rendu perçu par l'analyste.
+
+2. **Mode benchmark intégré** (`app/graph/graph-view.tsx`) : bouton
+   "Benchmark 50k nœuds" qui charge le graphe synthétique (loi de puissance)
+   et utilise le layout détaché (`runLayoutDetached`). Le FPS est mesuré en
+   temps réel pendant le layout.
+
+3. **Stress test avec interactions** : bouton "Stress test (6 s)" qui anime
+   la caméra (pan circulaire + zoom in/out déterministe) pendant 6 secondes
+   et capture les FPS min/max/moyenne. Cela sollicite le culling, le LOD,
+   et le rendu WebGL sous charge.
+
+### Reste à faire avant de clore la Phase 2
+
+Les mécanismes sont en place ; il reste à **exécuter le stress test sur une
+machine réelle avec WebView2 au premier plan** pour obtenir les chiffres
+ définitifs et statuer le critère FPS ≥ 45. Cette mesure ne peut pas être
+faite dans l'environnement de développement actuel (pas d'écran garanti).

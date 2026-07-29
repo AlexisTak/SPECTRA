@@ -1,0 +1,20 @@
+[package]
+name = "spectra-correlate"
+version = "0.1.0"
+description = "Moteur de corrélation d'identité, déduplication et scoring pour SPECTRA."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+spectra-core = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+strsim = "0.11"
+
+[lints]
+workspace = true

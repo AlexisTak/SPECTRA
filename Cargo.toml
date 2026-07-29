@@ -16,6 +16,10 @@ members = [
     "crates/spectra-audit",
     "crates/spectra-probe",
     "crates/spectra-probe-gen",
+    "crates/spectra-transform",
+    "crates/spectra-plugins",
+    "crates/spectra-collect",
+    "crates/spectra-correlate", "crates/spectra-report", "crates/spectra-ai",
 ]
 
 [workspace.package]
@@ -53,6 +57,7 @@ tokio = { version = "1.35", features = ["full"] }
 tokio-stream = "0.1"
 tokio-util = { version = "0.7", features = ["rt"] }
 futures = "0.3"
+async-trait = "0.1"
 
 # HTTP
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "json", "stream"] }
@@ -70,10 +75,20 @@ tracing = "0.1"
 # Cache
 dashmap = "6"
 
+# PDF generation
+printpdf = "0.3"
+
+# DOCX generation
+docx-rs = "0.4"
+
 # Crates internes
 spectra-core = { path = "crates/spectra-core" }
 spectra-store = { path = "crates/spectra-store" }
 spectra-audit = { path = "crates/spectra-audit" }
+spectra-transform = { path = "crates/spectra-transform" }
+spectra-plugins = { path = "crates/spectra-plugins" }
+spectra-collect = { path = "crates/spectra-collect" }
+spectra-correlate = { path = "crates/spectra-correlate" }
 
 # Lints appliqués aux seuls crates `spectra-*` (opt-in via `[lints] workspace = true`).
 # Le crate `src-tauri` hérité n'y est volontairement pas soumis pour l'instant :

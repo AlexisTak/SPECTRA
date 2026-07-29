@@ -1,0 +1,23 @@
+[package]
+name = "spectra-transform"
+version = "0.1.0"
+description = "Moteur de transforms SPECTRA : trait Transform, orchestrateur DAG, rate limiting, cache, annulation."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+spectra-core = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+governor = { workspace = true }
+dashmap = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

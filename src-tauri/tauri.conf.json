@@ -1,8 +1,8 @@
 {
   "$schema": "https://tauri.app/schema/tauri.conf.json",
-  "productName": "Cekarna",
-  "version": "0.1.0",
-  "identifier": "com.cekarna.enquetes",
+  "productName": "SPECTRA",
+  "version": "0.2.0",
+  "identifier": "com.spectra.osint",
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3000",
@@ -11,24 +11,63 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["appimage", "deb", "rpm", "dmg", "msi", "nsis"],
+    "license": "AGPL-3.0-only",
+    "copyright": "© 2026 SPECTRA Contributors",
     "icon": [
       "icons/icon-32.png",
       "icons/icon-128.png",
       "icons/icon-256.png",
       "icons/icon.ico"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libappindicator3-1"]
+      },
+      "rpm": {
+        "depends": ["webkit2gtk4.1", "libappindicator-gtk3"]
+      }
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "both"
+      }
+    },
+    "macOS": {
+      "dmg": {
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 170
+        },
+        "windowSize": {
+          "height": 400,
+          "width": 660
+        }
+      }
+    }
   },
-  "plugins": {},
+  "plugins": {
+    "updater": {
+      "active": false,
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlDNDkyM0I1MjM0Qjk5NTMKUldSWjFBdFl1bGh0N2Z3dFpCVVZtbll1ZW5xU3F1bjdyS3hkdEJ4ZWJjQjZVNVNqRjVrMXd3TFoK",
+      "endpoints": []
+    }
+  },
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "Cekarna",
-        "width": 1280,
-        "height": 720,
-        "minWidth": 800,
-        "minHeight": 600
+        "title": "SPECTRA",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 768,
+        "center": true
       }
     ],
     "security": {

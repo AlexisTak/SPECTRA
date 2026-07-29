@@ -6,29 +6,40 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
-const NAV = [
-  { href: '/', label: 'Tableau de bord' },
-  { href: '/cases', label: 'Dossiers' },
-  { href: '/osint', label: 'OSINT', highlight: true },
-  { href: '/graph', label: 'Graphe' },
-  { href: '/search', label: 'Recherche' },
-  { href: '/reports', label: 'Rapports' },
-  { href: '/audit', label: 'Intégrité' },
-] as const
+const useNav = () => {
+  const { t } = useTranslation()
+  return [
+    { href: '/', label: t('nav.dashboard') },
+    { href: '/cases', label: t('nav.cases') },
+    { href: '/osint', label: t('nav.osint'), highlight: true },
+    { href: '/graph', label: t('nav.graph') },
+    { href: '/timeline', label: 'Timeline' },
+    { href: '/table', label: 'Table' },
+    { href: '/map', label: 'Carte' },
+    { href: '/notes', label: 'Notes' },
+    { href: '/ach', label: 'ACH' },
+    { href: '/search', label: t('nav.search') },
+    { href: '/reports', label: t('nav.reports') },
+    { href: '/audit', label: t('nav.integrity') },
+  ] as const
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation()
   const pathname = usePathname()
+  const NAV = useNav()
 
   return (
     <div className="flex min-h-screen">
       <aside className="flex w-56 shrink-0 flex-col border-r border-[var(--color-edge)] bg-[var(--color-panel)]">
         <div className="border-b border-[var(--color-edge)] px-5 py-4">
           <Link href="/" className="block">
-            <p className="text-sm font-semibold tracking-tight">Cekarna</p>
+            <p className="text-sm font-semibold tracking-tight">{t('app.name')}</p>
             <p className="text-xs text-[var(--color-muted)]">
-              Investigation locale
+              {t('app.tagline')}
             </p>
           </Link>
         </div>
@@ -54,7 +65,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {item.label}
                 {(item as any).highlight && (
                   <span className="ml-2 rounded bg-gradient-to-r from-amber-500 to-rose-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                    NEW
+                    {t('nav.new')}
                   </span>
                 )}
               </Link>
@@ -64,7 +75,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="mt-auto border-t border-[var(--color-edge)] px-5 py-3">
           <p className="text-xs text-[var(--color-muted)]">
-            Données locales uniquement
+            {t('app.footer')}
           </p>
         </div>
       </aside>

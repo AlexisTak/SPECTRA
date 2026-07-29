@@ -1,0 +1,39 @@
+{
+  "app": {
+    "name": "SPECTRA",
+    "tagline": "Investigation locale",
+    "footer": "Données locales uniquement"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "cases": "Dossiers",
+    "osint": "OSINT",
+    "graph": "Graphe",
+    "search": "Recherche",
+    "reports": "Rapports",
+    "integrity": "Intégrité",
+    "new": "Nouveau"
+  },
+  "common": {
+    "loading": "Chargement…",
+    "error": "Erreur",
+    "retry": "Réessayer",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "create": "Créer",
+    "edit": "Modifier",
+    "close": "Fermer",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "all": "Tous",
+    "none": "Aucun",
+    "yes": "Oui",
+    "no": "Non"
+  },
+  "commandPalette": {
+    "title": "Palette de commandes",
+    "placeholder": "Tapez une commande ou recherchez…",
+    "shortcut": "Ctrl+K"
+  }
+}

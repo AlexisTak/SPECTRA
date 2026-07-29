@@ -1,0 +1,31 @@
+[package]
+name = "spectra-collect"
+version = "0.1.0"
+description = "Transforms natifs SPECTRA : DNS, WHOIS, Certificate Transparency, email, téléphone."
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+spectra-core = { workspace = true }
+spectra-transform = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+reqwest = { workspace = true }
+regex = { workspace = true }
+url = { workspace = true }
+chrono = { workspace = true }
+
+# DNS
+hickory-resolver = { version = "0.26", features = ["tokio", "system-config"] }
+
+[dev-dependencies]
+spectra-store = { workspace = true }
+
+[lints]
+workspace = true

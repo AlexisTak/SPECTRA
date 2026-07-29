@@ -1,9 +1,9 @@
-//! Cekarna — application de bureau d'enquêtes OSINT.
+//! SPECTRA — application de bureau d'investigation OSINT.
 //!
 //! Point d'entrée et enregistrement des commandes Tauri.
 //!
-//! Le shell applicatif reste celui de Cekarna ; les briques de domaine SPECTRA
-//! (`spectra-core`, `spectra-store`, `spectra-audit`) sont introduites
+//! Les briques de domaine SPECTRA (`spectra-core`, `spectra-store`,
+//! `spectra-audit`, `spectra-ai`, `spectra-report`) sont introduites
 //! progressivement par les crates du workspace.
 
 mod commands;
@@ -25,6 +25,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;

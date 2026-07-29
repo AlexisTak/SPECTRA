@@ -39,10 +39,10 @@ jobs:
       # maintenant produirait un diff de reformatage masquant les vraies
       # corrections.
       - name: Format — crates spectra
-        run: cargo fmt -p spectra-core -p spectra-store -p spectra-audit --check
+        run: cargo fmt -p spectra-core -p spectra-store -p spectra-audit -p spectra-report -p spectra-ai --check
 
       - name: Clippy — crates spectra (strict)
-        run: cargo clippy -p spectra-core -p spectra-store -p spectra-audit --all-targets -- -D warnings
+        run: cargo clippy -p spectra-core -p spectra-store -p spectra-audit -p spectra-report -p spectra-ai --all-targets -- -D warnings
 
       - name: Clippy — workspace complet (non bloquant sur le hérité)
         run: cargo clippy --workspace --all-targets

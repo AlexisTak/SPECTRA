@@ -1,10 +1,12 @@
 import type { Metadata } from 'next'
 import { AppShell } from '@/components/layout/shell'
+import { I18nProvider } from './components/I18nProvider'
+import { CommandPalette } from './components/CommandPalette'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Cekarna — enquêtes',
-  description: "Plateforme d'investigation locale",
+  title: 'SPECTRA — Investigation OSINT',
+  description: "Plateforme d'investigation OSINT 100 % locale",
 }
 
 export default function RootLayout({
@@ -15,7 +17,10 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body className="min-h-screen antialiased">
-        <AppShell>{children}</AppShell>
+        <I18nProvider>
+          <AppShell>{children}</AppShell>
+          <CommandPalette />
+        </I18nProvider>
       </body>
     </html>
   )

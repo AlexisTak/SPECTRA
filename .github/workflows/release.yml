@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  draft-release:
+    name: Create draft release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      release_id: ${{ steps.create_release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create draft release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: SPECTRA ${{ github.ref_name }}
+          draft: true
+          prerelease: false
+
+  build:
+    name: Build — ${{ matrix.platform }}
+    needs: draft-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-latest
+            target: appimage,deb,rpm
+          - platform: macos
+            os: macos-latest
+            target: dmg
+          - platform: windows
+            os: windows-latest
+            target: msi,nsis
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dépendances système Tauri (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'SPECTRA ${{ github.ref_name }}'
+          releaseBody: |
+            ## Installation
+
+            - **Linux** : téléchargez l'AppImage (`SPECTRA_*.AppImage`) ou le paquet `.deb` / `.rpm`.
+            - **macOS** : téléchargez le `.dmg` et glissez SPECTRA dans Applications.
+            - **Windows** : téléchargez le `.msi` ou l'installateur `.exe` (NSIS).
+
+            ## Vérification
+
+            Les hashes SHA-256 des artefacts sont joints au release.
+          releaseDraft: true
+          prerelease: false
+          updaterJsonPreferNsis: true

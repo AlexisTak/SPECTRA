@@ -1,0 +1,18 @@
+[meta]
+id = "example-transform"
+name = "Transform d'exemple"
+version = "0.1.0"
+author = "SPECTRA contributors"
+license = "AGPL-3.0-only"
+
+[[transforms]]
+id = "example:noop"
+name = "No-op d'exemple"
+description = "Transform trivial qui renvoie une observation statique."
+input_kinds = ["domain"]
+output_kinds = ["domain"]
+
+[permissions.network]
+allowlist = ["example.com"]
+max_requests_per_run = 1
+max_response_bytes = 1024

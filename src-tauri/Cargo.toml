@@ -1,10 +1,10 @@
 [package]
 name = "cekarna"
-version = "0.1.0"
-description = "Cekarna - Desktop OSINT application for case investigations"
-authors = ["Cekarna Team"]
+version = "0.2.0"
+description = "SPECTRA — plateforme d'investigation OSINT 100 % locale"
+authors = ["SPECTRA Contributors"]
 license = "AGPL-3.0-only"
-repository = "https://github.com/cekarna/enquetes"
+repository = "https://github.com/spectra-osint/spectra"
 edition = "2021"
 
 [lib]
@@ -22,6 +22,7 @@ tauri-build = { version = "2.0", features = [] }
 tauri = { version = "2.0", features = [] }
 tauri-plugin-shell = "2.0"
 tauri-plugin-dialog = "2.0"
+tauri-plugin-updater = "2.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

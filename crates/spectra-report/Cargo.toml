@@ -1,0 +1,25 @@
+[package]
+name = "spectra-report"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+description = "Génération de rapports SPECTRA (Markdown, HTML, PDF)."
+
+[dependencies]
+spectra-core = { workspace = true }
+spectra-store = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+printpdf = { workspace = true }
+blake3 = { workspace = true }
+spectra-audit = { workspace = true }
+docx-rs = { workspace = true }
+
+[lints]
+workspace = true

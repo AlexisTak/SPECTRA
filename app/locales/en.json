@@ -1,0 +1,39 @@
+{
+  "app": {
+    "name": "SPECTRA",
+    "tagline": "Local investigation",
+    "footer": "Local data only"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "cases": "Cases",
+    "osint": "OSINT",
+    "graph": "Graph",
+    "search": "Search",
+    "reports": "Reports",
+    "integrity": "Integrity",
+    "new": "New"
+  },
+  "common": {
+    "loading": "Loading…",
+    "error": "Error",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create",
+    "edit": "Edit",
+    "close": "Close",
+    "search": "Search",
+    "filter": "Filter",
+    "all": "All",
+    "none": "None",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "commandPalette": {
+    "title": "Command palette",
+    "placeholder": "Type a command or search…",
+    "shortcut": "Ctrl+K"
+  }
+}
