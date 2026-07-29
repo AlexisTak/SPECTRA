@@ -1,0 +1,408 @@
+[
+  {
+    "id": "builtin:github",
+    "site_name": "GitHub",
+    "category": "dev",
+    "selector_kind": "username",
+    "request": {
+      "method": "get",
+      "url": "https://github.com/{selector}",
+      "headers": {},
+      "body": null,
+      "follow_redirects": true,
+      "timeout": "20s"
+    },
+    "decision": {
+      "exists_if": [
+        {
+          "status_code": 200
+        }
+      ],
+      "missing_if": [
+        {
+          "status_code": 404
+        }
+      ],
+      "blocked_if": [
+        {
+          "status_code": 429
+        },
+        {
+          "status_code": 403
+        }
+      ]
+    },
+    "extract": [],
+    "quality": {
+      "control_success_rate": 0.0,
+      "block_rate": 0.0,
+      "median_latency_ms": 0,
+      "last_success": null,
+      "confidence": "unknown"
+    },
+    "source": {
+      "source": "builtin",
+      "license": "internal",
+      "source_url": null,
+      "source_hash": null
+    }
+  },
+  {
+    "id": "builtin:gitlab",
+    "site_name": "GitLab",
+    "category": "dev",
+    "selector_kind": "username",
+    "request": {
+      "method": "get",
+      "url": "https://gitlab.com/{selector}",
+      "headers": {},
+      "body": null,
+      "follow_redirects": true,
+      "timeout": "20s"
+    },
+    "decision": {
+      "exists_if": [
+        {
+          "status_code": 200
+        }
+      ],
+      "missing_if": [
+        {
+          "status_code": 404
+        }
+      ],
+      "blocked_if": [
+        {
+          "status_code": 429
+        },
+        {
+          "status_code": 403
+        }
+      ]
+    },
+    "extract": [],
+    "quality": {
+      "control_success_rate": 0.0,
+      "block_rate": 0.0,
+      "median_latency_ms": 0,
+      "last_success": null,
+      "confidence": "unknown"
+    },
+    "source": {
+      "source": "builtin",
+      "license": "internal",
+      "source_url": null,
+      "source_hash": null
+    }
+  },
+  {
+    "id": "builtin:reddit",
+    "site_name": "Reddit",
+    "category": "forum",
+    "selector_kind": "username",
+    "request": {
+      "method": "get",
+      "url": "https://www.reddit.com/user/{selector}/about.json",
+      "headers": {},
+      "body": null,
+      "follow_redirects": true,
+      "timeout": "20s"
+    },
+    "decision": {
+      "exists_if": [
+        {
+          "json_pointer_equals": {
+            "pointer": "/kind",
+            "value": "t2"
+          }
+        }
+      ],
+      "missing_if": [
+        {
+          "status_code": 404
+        },
+        {
+          "body_contains": "\"error\": 404"
+        }
+      ],
+      "blocked_if": [
+        {
+          "status_code": 429
+        },
+        {
+          "status_code": 403
+        }
+      ]
+    },
+    "extract": [
+      {
+        "name": "created_utc",
+        "selector": "/data/created_utc",
+        "kind": {
+          "json_pointer": {
+            "pointer": "/data/created_utc"
+          }
+        }
+      },
+      {
+        "name": "total_karma",
+        "selector": "/data/total_karma",
+        "kind": {
+          "json_pointer": {
+            "pointer": "/data/total_karma"
+          }
+        }
+      }
+    ],
+    "quality": {
+      "control_success_rate": 0.0,
+      "block_rate": 0.0,
+      "median_latency_ms": 0,
+      "last_success": null,
+      "confidence": "unknown"
+    },
+    "source": {
+      "source": "builtin",
+      "license": "internal",
+      "source_url": null,
+      "source_hash": null
+    }
+  },
+  {
+    "id": "builtin:npm",
+    "site_name": "npm",
+    "category": "dev",
+    "selector_kind": "username",
+    "request": {
+      "method": "get",
+      "url": "https://www.npmjs.com/~{selector}",
+      "headers": {},
+      "body": null,
+      "follow_redirects": true,
+      "timeout": "20s"
+    },
+    "decision": {
+      "exists_if": [
+        {
+          "status_code": 200
+        }
+      ],
+      "missing_if": [
+        {
+          "status_code": 404
+        }
+      ],
+      "blocked_if": [
+        {
+          "status_code": 429
+        },
+        {
+          "status_code": 403
+        }
+      ]
+    },
+    "extract": [],
+    "quality": {
+      "control_success_rate": 0.0,
+      "block_rate": 0.0,
+      "median_latency_ms": 0,
+      "last_success": null,
+      "confidence": "unknown"
+    },
+    "source": {
+      "source": "builtin",
+      "license": "internal",
+      "source_url": null,
+      "source_hash": null
+    }
+  },
+  {
+    "id": "builtin:crates_io",
+    "site_name": "crates.io",
+    "category": "dev",
+    "selector_kind": "username",
+    "request": {
+      "method": "get",
+      "url": "https://crates.io/api/v1/users/{selector}",
+      "headers": {},
+      "body": null,
+      "follow_redirects": true,
+      "timeout": "20s"
+    },
+    "decision": {
+      "exists_if": [
+        {
+          "status_code": 200
+        }
+      ],
+      "missing_if": [
+        {
+          "status_code": 404
+        }
+      ],
+      "blocked_if": [
+        {
+          "status_code": 429
+        }
+      ]
+    },
+    "extract": [],
+    "quality": {
+      "control_success_rate": 0.0,
+      "block_rate": 0.0,
+      "median_latency_ms": 0,
+      "last_success": null,
+      "confidence": "unknown"
+    },
+    "source": {
+      "source": "builtin",
+      "license": "internal",
+      "source_url": null,
+      "source_hash": null
+    }
+  },
+  {
+    "id": "builtin:hackernews",
+    "site_name": "Hacker News",
+    "category": "forum",
+    "selector_kind": "username",
+    "request": {
+      "method": "get",
+      "url": "https://news.ycombinator.com/user?id={selector}",
+      "headers": {},
+      "body": null,
+      "follow_redirects": true,
+      "timeout": "20s"
+    },
+    "decision": {
+      "exists_if": [
+        {
+          "body_contains": "created:"
+        }
+      ],
+      "missing_if": [
+        {
+          "body_contains": "No such user."
+        }
+      ],
+      "blocked_if": [
+        {
+          "status_code": 429
+        }
+      ]
+    },
+    "extract": [],
+    "quality": {
+      "control_success_rate": 0.0,
+      "block_rate": 0.0,
+      "median_latency_ms": 0,
+      "last_success": null,
+      "confidence": "unknown"
+    },
+    "source": {
+      "source": "builtin",
+      "license": "internal",
+      "source_url": null,
+      "source_hash": null
+    }
+  },
+  {
+    "id": "builtin:pypi",
+    "site_name": "PyPI",
+    "category": "dev",
+    "selector_kind": "username",
+    "request": {
+      "method": "get",
+      "url": "https://pypi.org/user/{selector}/",
+      "headers": {},
+      "body": null,
+      "follow_redirects": true,
+      "timeout": "20s"
+    },
+    "decision": {
+      "exists_if": [
+        {
+          "body_contains": "Profile of"
+        }
+      ],
+      "missing_if": [
+        {
+          "status_code": 404
+        },
+        {
+          "body_contains": "Page not found"
+        }
+      ],
+      "blocked_if": [
+        {
+          "status_code": 429
+        },
+        {
+          "status_code": 403
+        },
+        {
+          "body_contains": "Client Challenge"
+        }
+      ]
+    },
+    "extract": [],
+    "quality": {
+      "control_success_rate": 0.0,
+      "block_rate": 0.0,
+      "median_latency_ms": 0,
+      "last_success": null,
+      "confidence": "unknown"
+    },
+    "source": {
+      "source": "builtin",
+      "license": "internal",
+      "source_url": null,
+      "source_hash": null
+    }
+  },
+  {
+    "id": "builtin:dockerhub",
+    "site_name": "Docker Hub",
+    "category": "dev",
+    "selector_kind": "username",
+    "request": {
+      "method": "get",
+      "url": "https://hub.docker.com/v2/users/{selector}",
+      "headers": {},
+      "body": null,
+      "follow_redirects": true,
+      "timeout": "20s"
+    },
+    "decision": {
+      "exists_if": [
+        {
+          "status_code": 200
+        }
+      ],
+      "missing_if": [
+        {
+          "status_code": 404
+        }
+      ],
+      "blocked_if": [
+        {
+          "status_code": 429
+        }
+      ]
+    },
+    "extract": [],
+    "quality": {
+      "control_success_rate": 0.0,
+      "block_rate": 0.0,
+      "median_latency_ms": 0,
+      "last_success": null,
+      "confidence": "unknown"
+    },
+    "source": {
+      "source": "builtin",
+      "license": "internal",
+      "source_url": null,
+      "source_hash": null
+    }
+  }
+]

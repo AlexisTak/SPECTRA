@@ -29,7 +29,14 @@ pub fn extract_metadata(
                 serde_json::from_str::<serde_json::Value>(body)
                     .ok()
                     .and_then(|json| json.pointer(pointer.as_str()).cloned())
-                    .map(|v| v.to_string())
+                    .map(|v| match v {
+                        // `to_string()` sur une valeur JSON conserve les
+                        // guillemets : une bio extraite deviendrait `"..."`,
+                        // guillemets compris, et serait recopiée telle quelle
+                        // dans le dossier d'enquête.
+                        serde_json::Value::String(s) => s,
+                        other => other.to_string(),
+                    })
             }
             ExtractionKind::Regex { pattern } => {
                 Regex::new(pattern)

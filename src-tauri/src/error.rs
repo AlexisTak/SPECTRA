@@ -25,6 +25,12 @@ pub enum AppError {
     Internal(String),
 }
 
+impl From<anyhow::Error> for AppError {
+    fn from(e: anyhow::Error) -> Self {
+        AppError::Internal(e.to_string())
+    }
+}
+
 impl AppError {
     /// Construit une erreur métier à partir d'un message.
     pub fn msg(message: impl Into<String>) -> Self {

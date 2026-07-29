@@ -66,11 +66,12 @@ export default function OsintPage() {
     setProgress({ current: 0, total: 0 })
 
     try {
-      const raw = await invoke<string>('run_osint_campaign', {
-        selector,
+      // La commande renvoie un tableau typé, pas une chaîne : `JSON.parse`
+      // ferait échouer toute recherche.
+      const parsed = await invoke<RawProbeResult[]>('run_osint_campaign', {
+        selector: selector.trim(),
         kind: selectorType,
       })
-      const parsed: RawProbeResult[] = JSON.parse(raw)
 
       setProgress({ current: parsed.length, total: parsed.length })
       setResults(
@@ -114,7 +115,7 @@ export default function OsintPage() {
     <>
       <PageHeader
         title="Recherche OSINT"
-        subtitle="Vérification de pseudos, emails et téléphones sur +700 sites"
+        subtitle="Vérification d'un pseudo sur les sites du jeu de sondes embarqué"
       />
 
       <div className="flex flex-col gap-6 p-8">
@@ -253,8 +254,26 @@ export default function OsintPage() {
         {results.length === 0 && !running && (
           <EmptyState
             title="Aucun résultat"
-            hint="Entrez un pseudo, email ou téléphone pour lancer la recherche."
+            hint={
+              selectorType === 'username'
+                ? 'Entrez un pseudo pour lancer la recherche.'
+                : "Aucune sonde n'est encore définie pour ce type de sélecteur : la recherche ne renverra rien."
+            }
           />
+        )}
+
+        {/* Une absence de résultat n'est pas une absence de compte : la
+            distinction est essentielle dans un dossier d'enquête. */}
+        {results.length > 0 && (
+          <div className="rounded border border-[var(--color-edge)] bg-[var(--color-panel)] p-3">
+            <p className="text-xs leading-relaxed text-[var(--color-muted)]">
+              <strong className="text-[var(--color-ink)]">Portée du résultat.</strong>{' '}
+              Seuls les sites du jeu de sondes embarqué ont été interrogés. Un
+              statut « inexistant » signifie que la sonde n&apos;a pas trouvé de
+              compte — pas qu&apos;il n&apos;en existe aucun. Les statuts
+              « bloqué » et « indéterminé » ne permettent aucune conclusion.
+            </p>
+          </div>
         )}
       </div>
     </>
