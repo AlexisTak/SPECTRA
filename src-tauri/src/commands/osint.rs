@@ -29,6 +29,8 @@ pub struct ProbeResult {
     pub site: String,
     pub outcome: ProbeOutcome,
     pub elapsed_ms: u64,
+    /// Vrai si la règle de la sonde a échoué au contrôle anti-faux-positifs.
+    pub degraded: bool,
 }
 
 /// Lance une campagne OSINT sur un sélecteur donné.
@@ -78,40 +80,76 @@ pub async fn run_osint_campaign(
         50,
     );
 
+    // Bilan de santé avant la recherche : une sonde qui répond « existe » sur
+    // un pseudo aléatoire ne peut rien affirmer sur le vrai sélecteur.
+    let degraded = degraded_probes(&engine, &filtered).await;
+
     let cancel = tokio_util::sync::CancellationToken::new();
     let results = engine.run_campaign(&selector, &filtered, cancel).await;
 
-    // Convertir les résultats
     let converted: Vec<ProbeResult> = results
         .into_iter()
         .map(|r| {
-            let outcome = match r.outcome {
-                // `final_url` est l'URL après redirections : c'est elle qui
-                // pointe vers le profil réel, pas l'URL de la sonde.
-                SpectraOutcome::Exists { evidence, .. } => ProbeOutcome::Exists {
-                    url: Some(evidence.final_url),
-                },
-                SpectraOutcome::Missing => ProbeOutcome::Missing,
-                SpectraOutcome::Blocked { reason } => ProbeOutcome::Blocked {
-                    reason: format!("{reason:?}"),
-                },
-                SpectraOutcome::Indeterminate { reason } => {
-                    ProbeOutcome::Indeterminate { reason }
-                }
-                SpectraOutcome::Error(e) => ProbeOutcome::Error {
-                    message: format!("{e:?}"),
-                },
-            };
-
-            ProbeResult {
-                site: r.probe_id.0.split(':').nth(1).unwrap_or("unknown").to_string(),
-                outcome,
-                elapsed_ms: r.elapsed_ms,
-            }
+            let degradation = degraded.get(&r.probe_id.0).cloned();
+            present_result(r, degradation)
         })
         .collect();
 
     Ok(converted)
+}
+
+/// Traduit un résultat de sonde en résultat présentable à l'analyste.
+///
+/// C'est ici que se joue la seule règle qui compte : **une sonde dégradée ne
+/// conclut rien**. Si sa règle répond « existe » à un pseudo aléatoire, son
+/// « existe » sur la vraie cible ne vaut pas davantage — et son « inexistant »
+/// non plus, puisque la règle est cassée dans les deux sens. Les deux verdicts
+/// conclusifs sont donc ramenés à `Indeterminate`, motif à l'appui.
+///
+/// Les états `Blocked`, `Indeterminate` et `Error` sont laissés intacts : ils
+/// ne concluaient déjà rien, les réécrire n'ajouterait que du bruit.
+fn present_result(
+    result: spectra_probe::ProbeResult,
+    degradation: Option<String>,
+) -> ProbeResult {
+    let outcome = match result.outcome {
+        SpectraOutcome::Exists { .. } | SpectraOutcome::Missing
+            if degradation.is_some() =>
+        {
+            ProbeOutcome::Indeterminate {
+                reason: format!(
+                    "sonde dégradée — {}",
+                    degradation.as_deref().unwrap_or("règle non fiable")
+                ),
+            }
+        }
+        // `final_url` est l'URL après redirections : c'est elle qui pointe vers
+        // le profil réel, pas l'URL de la sonde.
+        SpectraOutcome::Exists { evidence, .. } => ProbeOutcome::Exists {
+            url: Some(evidence.final_url),
+        },
+        SpectraOutcome::Missing => ProbeOutcome::Missing,
+        SpectraOutcome::Blocked { reason } => ProbeOutcome::Blocked {
+            reason: format!("{reason:?}"),
+        },
+        SpectraOutcome::Indeterminate { reason } => ProbeOutcome::Indeterminate { reason },
+        SpectraOutcome::Error(e) => ProbeOutcome::Error {
+            message: format!("{e:?}"),
+        },
+    };
+
+    ProbeResult {
+        site: result
+            .probe_id
+            .0
+            .split(':')
+            .nth(1)
+            .unwrap_or("unknown")
+            .to_string(),
+        outcome,
+        elapsed_ms: result.elapsed_ms,
+        degraded: degradation.is_some(),
+    }
 }
 
 /// Liste les sondes disponibles, pour que l'analyste sache ce qui sera interrogé.
@@ -170,6 +208,85 @@ pub struct UpdateReport {
 }
 
 // =============================================================================
+// Bilan de santé des sondes (anti-faux-positifs)
+// =============================================================================
+
+/// Durée de validité d'un bilan de santé.
+///
+/// La santé d'une sonde est une propriété de la *règle*, pas de la recherche :
+/// la recontrôler à chaque requête de l'analyste doublerait le trafic sortant
+/// sans rien apprendre de neuf. Une demi-heure suffit à détecter un site qui
+/// change de comportement, sans transformer chaque recherche en double campagne.
+const HEALTH_TTL: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
+/// Sondes reconnues dégradées, indexées par identifiant → raison.
+static HEALTH: std::sync::OnceLock<std::sync::Mutex<HealthCache>> =
+    std::sync::OnceLock::new();
+
+#[derive(Default)]
+struct HealthCache {
+    checked_at: Option<std::time::Instant>,
+    degraded: std::collections::HashMap<String, String>,
+}
+
+/// Identifie les sondes dont la règle de décision est cassée.
+///
+/// Le principe (CLAUDE.md §8) : on interroge chaque sonde avec un sélecteur
+/// aléatoire qui n'existe statistiquement nulle part. Une sonde saine répond
+/// « inexistant ». Une sonde qui répond « existe » signalerait un compte sur
+/// *toutes* les recherches — le défaut le plus grave possible dans un outil
+/// d'enquête, et celui qu'aucune relecture de code ne révèle : il vient du
+/// site, pas du nôtre. C'est exactement ainsi qu'a été détecté le cas PyPI,
+/// qui sert sa page anti-bot avec un code HTTP 200.
+async fn degraded_probes(
+    engine: &ProbeEngine,
+    probes: &[spectra_probe::Probe],
+) -> std::collections::HashMap<String, String> {
+    let cache = HEALTH.get_or_init(Default::default);
+
+    // Le verrou est relâché avant tout `await` : le tenir à travers une
+    // campagne réseau bloquerait toutes les autres recherches pendant l'I/O.
+    {
+        let guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+        if guard
+            .checked_at
+            .is_some_and(|t| t.elapsed() < HEALTH_TTL)
+        {
+            return guard.degraded.clone();
+        }
+    }
+
+    // Toutes les sondes filtrées partagent le même type de sélecteur : un seul
+    // sélecteur de contrôle suffit pour la campagne entière.
+    let Some(kind) = probes.first().map(|p| p.selector_kind.clone()) else {
+        return std::collections::HashMap::new();
+    };
+    let control = spectra_probe::control::generate_control_selector(&kind);
+
+    let cancel = tokio_util::sync::CancellationToken::new();
+    let results = engine.run_campaign(&control, probes, cancel).await;
+
+    let degraded: std::collections::HashMap<String, String> = results
+        .into_iter()
+        .filter_map(|r| match r.outcome {
+            SpectraOutcome::Exists { .. } => Some((
+                r.probe_id.0,
+                "répond « existe » sur un pseudo aléatoire".to_string(),
+            )),
+            _ => None,
+        })
+        .collect();
+
+    {
+        let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+        guard.checked_at = Some(std::time::Instant::now());
+        guard.degraded = degraded.clone();
+    }
+
+    degraded
+}
+
+// =============================================================================
 // Chargement des sondes
 // =============================================================================
 
@@ -204,4 +321,89 @@ fn load_probes(storage_root: &std::path::Path) -> AppResult<Vec<spectra_probe::P
 
     serde_json::from_str(EMBEDDED_PROBES)
         .map_err(|e| AppError::msg(format!("snapshot de sondes embarqué invalide : {e}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use spectra_probe::schema::{Evidence, ProbeId};
+
+    fn result_with(outcome: SpectraOutcome) -> spectra_probe::ProbeResult {
+        spectra_probe::ProbeResult {
+            probe_id: ProbeId("builtin:exemple".to_string()),
+            selector: "torvalds".to_string(),
+            outcome,
+            elapsed_ms: 42,
+        }
+    }
+
+    fn exists() -> SpectraOutcome {
+        SpectraOutcome::Exists {
+            evidence: Evidence {
+                triggered_assertion: Some("status_code=200".to_string()),
+                status_code: 200,
+                final_url: "https://exemple.test/torvalds".to_string(),
+                body_hash: "abcd".to_string(),
+                body_preview: None,
+                timestamp: chrono::Utc::now(),
+            },
+            extracted: Default::default(),
+        }
+    }
+
+    #[test]
+    fn sonde_saine_conserve_son_verdict() {
+        let r = present_result(result_with(exists()), None);
+        assert!(matches!(r.outcome, ProbeOutcome::Exists { .. }));
+        assert!(!r.degraded);
+        assert_eq!(r.site, "exemple");
+    }
+
+    /// Le cas qui justifie tout le mécanisme : sans cette conversion, une règle
+    /// cassée verse un compte inexistant au dossier d'enquête.
+    #[test]
+    fn sonde_degradee_ne_peut_pas_affirmer_une_existence() {
+        let r = present_result(result_with(exists()), Some("règle cassée".to_string()));
+
+        assert!(
+            !matches!(r.outcome, ProbeOutcome::Exists { .. }),
+            "une sonde dégradée ne doit jamais présenter un compte comme trouvé"
+        );
+        match r.outcome {
+            ProbeOutcome::Indeterminate { reason } => {
+                assert!(reason.contains("dégradée"), "motif illisible : {reason}");
+            }
+            other => panic!("attendu Indeterminate, obtenu {other:?}"),
+        }
+        assert!(r.degraded);
+    }
+
+    /// Une règle cassée l'est dans les deux sens : son « inexistant » ne prouve
+    /// pas davantage une absence de compte.
+    #[test]
+    fn sonde_degradee_ne_peut_pas_affirmer_une_absence() {
+        let r = present_result(
+            result_with(SpectraOutcome::Missing),
+            Some("règle cassée".to_string()),
+        );
+        assert!(matches!(r.outcome, ProbeOutcome::Indeterminate { .. }));
+    }
+
+    /// `Blocked` ne concluait déjà rien : le réécrire ferait perdre la raison
+    /// du blocage, qui est l'information utile à l'analyste.
+    #[test]
+    fn etat_deja_non_conclusif_reste_intact() {
+        let r = present_result(
+            result_with(SpectraOutcome::Blocked {
+                reason: spectra_probe::schema::BlockReason::Cloudflare,
+            }),
+            Some("règle cassée".to_string()),
+        );
+        match r.outcome {
+            ProbeOutcome::Blocked { reason } => assert!(reason.contains("Cloudflare")),
+            other => panic!("attendu Blocked, obtenu {other:?}"),
+        }
+        // Le drapeau reste levé : l'UI doit toujours signaler la sonde.
+        assert!(r.degraded);
+    }
 }

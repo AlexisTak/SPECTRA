@@ -36,6 +36,7 @@ interface ProbeResult {
   outcome: ProbeOutcome
   url?: string
   reason?: string
+  degraded: boolean
 }
 
 interface RawProbeResult {
@@ -48,6 +49,7 @@ interface RawProbeResult {
     error?: { message: string }
   }
   elapsed_ms: number
+  degraded: boolean
 }
 
 export default function OsintPage() {
@@ -94,7 +96,7 @@ export default function OsintPage() {
             reason = r.outcome.error.message
           }
 
-          return { site: r.site, outcome, url, reason }
+          return { site: r.site, outcome, url, reason, degraded: r.degraded }
         }),
       )
     } catch (e) {
@@ -110,6 +112,7 @@ export default function OsintPage() {
     blocked: results.filter((r) => r.outcome === 'blocked').length,
     indeterminate: results.filter((r) => r.outcome === 'indeterminate').length,
   }
+  const degradedCount = results.filter((r) => r.degraded).length
 
   return (
     <>
@@ -202,6 +205,20 @@ export default function OsintPage() {
           </div>
         )}
 
+        {/* Le contrôle anti-faux-positifs a détecté une règle cassée : le dire
+            franchement, sinon l'analyste croit à une couverture qu'il n'a pas. */}
+        {degradedCount > 0 && (
+          <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3">
+            <p className="text-xs leading-relaxed text-amber-200">
+              <strong>{degradedCount} sonde(s) dégradée(s).</strong> Elles ont
+              répondu « compte trouvé » à un pseudo aléatoire lors du contrôle :
+              leur règle de détection ne correspond plus au comportement du site.
+              Leurs verdicts sont ramenés à « indéterminé » et ne doivent pas
+              être versés au dossier.
+            </p>
+          </div>
+        )}
+
         {/* Résultats */}
         {results.length > 0 && (
           <Panel title={`Résultats (${results.length})`}>
@@ -212,13 +229,23 @@ export default function OsintPage() {
                     <th className="pb-2">Site</th>
                     <th className="pb-2">Statut</th>
                     <th className="pb-2">URL</th>
-                    <th className="pb-2 text-right">Action</th>
+                    <th className="pb-2">Motif</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-edge)]">
                   {results.map((r, i) => (
                     <tr key={i} className="transition-colors hover:bg-white/5">
-                      <td className="py-2">{r.site}</td>
+                      <td className="py-2">
+                        {r.site}
+                        {r.degraded && (
+                          <span
+                            className="ml-2 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300"
+                            title="La règle de cette sonde a échoué au contrôle : son verdict n'est pas exploitable."
+                          >
+                            dégradée
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2">
                         <OutcomeBadge outcome={r.outcome} />
                       </td>
@@ -236,12 +263,11 @@ export default function OsintPage() {
                           <span className="text-[var(--color-muted)]">—</span>
                         )}
                       </td>
-                      <td className="py-2 text-right">
-                        {r.outcome === 'exists' && (
-                          <Button variant="primary" className="text-xs">
-                            Voir le profil
-                          </Button>
-                        )}
+                      {/* Un statut sans motif est inexploitable dans un dossier :
+                          « bloqué » ou « indéterminé » n'ont de valeur que si
+                          l'analyste sait pourquoi. */}
+                      <td className="py-2 text-xs text-[var(--color-muted)]">
+                        {r.reason ? truncate(r.reason, 48) : '—'}
                       </td>
                     </tr>
                   ))}
