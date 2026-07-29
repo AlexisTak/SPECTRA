@@ -25,14 +25,17 @@ pub struct AppState {
     conn: Mutex<Connection>,
     /// Racine du magasin de preuves, sous le répertoire de données applicatives.
     storage_root: std::path::PathBuf,
+    /// Service IA (Ollama ou offline).
+    pub ai_service: tokio::sync::RwLock<spectra_ai::AiService>,
 }
 
 impl AppState {
     /// Construit l'état à partir d'une connexion déjà initialisée.
-    pub fn new(conn: Connection, storage_root: std::path::PathBuf) -> Self {
+    pub fn new(conn: Connection, storage_root: std::path::PathBuf, ai_service: spectra_ai::AiService) -> Self {
         Self {
             conn: Mutex::new(conn),
             storage_root,
+            ai_service: tokio::sync::RwLock::new(ai_service),
         }
     }
 

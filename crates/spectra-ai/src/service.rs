@@ -61,6 +61,18 @@ impl AiService {
         self.backend.is_some()
     }
 
+    /// Calcule les embeddings d'une liste de textes.
+    pub async fn embed(&self, texts: &[&str]) -> Result<crate::backend::EmbeddingBatch, crate::AiError> {
+        let backend = self.require_backend()?;
+        backend.embed(texts).await
+    }
+
+    /// Génère un texte à partir d'un prompt brut.
+    pub async fn complete(&self, prompt: &str) -> Result<String, crate::AiError> {
+        let backend = self.require_backend()?;
+        backend.complete(prompt).await
+    }
+
     /// Résumé d'un texte libre.
     pub async fn summarize(&self,
         text: &str,

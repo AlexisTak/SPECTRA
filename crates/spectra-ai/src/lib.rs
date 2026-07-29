@@ -16,10 +16,12 @@
 
 pub mod backend;
 pub mod ollama;
+pub mod rag;
 pub mod service;
 
 pub use backend::{AiBackend, EmbeddingBatch};
 pub use ollama::OllamaBackend;
+pub use rag::{RagChunk, RagIndex, RagResult, RagSource};
 pub use service::{AiService, AiSuggestion};
 
 /// Erreur du moteur IA.

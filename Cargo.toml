@@ -89,6 +89,8 @@ spectra-transform = { path = "crates/spectra-transform" }
 spectra-plugins = { path = "crates/spectra-plugins" }
 spectra-collect = { path = "crates/spectra-collect" }
 spectra-correlate = { path = "crates/spectra-correlate" }
+spectra-report = { path = "crates/spectra-report" }
+spectra-ai = { path = "crates/spectra-ai" }
 
 # Lints appliqués aux seuls crates `spectra-*` (opt-in via `[lints] workspace = true`).
 # Le crate `src-tauri` hérité n'y est volontairement pas soumis pour l'instant :

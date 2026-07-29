@@ -14,6 +14,7 @@ pub mod claims;
 pub mod search;
 pub mod reports;
 pub mod osint;
+pub mod ai;
 
 // Re-export all command functions for Tauri 2
 // Use pub use to make Tauri's internal macros accessible to generate_handler!
@@ -28,3 +29,4 @@ pub use self::claims::*;
 pub use self::search::*;
 pub use self::reports::*;
 pub use self::osint::*;
+pub use self::ai::*;

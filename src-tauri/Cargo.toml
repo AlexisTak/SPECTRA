@@ -30,7 +30,9 @@ hex = { workspace = true }
 thiserror = { workspace = true }
 anyhow = "1.0"
 chrono = { workspace = true }
+spectra-core = { workspace = true }
 spectra-audit = { workspace = true }
+spectra-ai = { workspace = true }
 spectra-probe = { path = "../crates/spectra-probe" }
 # 0.40 + feature `serde_json` : requis pour que serde_json::Value implémente
 # ToSql/FromSql, et pour n'avoir qu'une seule version de libsqlite3-sys dans le

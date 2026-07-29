@@ -21,6 +21,7 @@ const useNav = () => {
     { href: '/map', label: 'Carte' },
     { href: '/notes', label: 'Notes' },
     { href: '/ach', label: 'ACH' },
+    { href: '/ai', label: 'IA' },
     { href: '/search', label: t('nav.search') },
     { href: '/reports', label: t('nav.reports') },
     { href: '/audit', label: t('nav.integrity') },

@@ -30,15 +30,17 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
 
-            // Magasin de preuves : les fichiers sont **copiés** ici à
-            // l'ingestion. Conserver un simple chemin vers un fichier externe
-            // ne garantit rien — il peut être modifié ou supprimé après
-            // enregistrement (`audit.md`, P1-2).
             let storage_root = data_dir.join("storage");
             std::fs::create_dir_all(&storage_root)?;
 
             let conn = database::init_database(&data_dir.join("casetrack.db"))?;
-            app.manage(AppState::new(conn, storage_root));
+
+            // Détection async du backend IA (Ollama) — block_on car setup est sync.
+            let ai_service = tauri::async_runtime::block_on(async {
+                spectra_ai::AiService::new_auto_detect().await
+            });
+
+            app.manage(AppState::new(conn, storage_root, ai_service));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -88,6 +90,12 @@ pub fn run() {
             commands::run_osint_campaign,
             commands::load_osint_probes,
             commands::update_osint_datasets,
+            commands::ai_status,
+            commands::ai_summarize,
+            commands::ai_extract_entities,
+            commands::ai_suggest_pivots,
+            commands::ai_detect_duplicates,
+            commands::ai_rag_query,
         ])
         .run(tauri::generate_context!())
         .expect("erreur au démarrage de l'application Tauri");
