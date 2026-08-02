@@ -11,6 +11,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": false,
     "targets": ["appimage", "deb", "rpm", "dmg", "msi", "nsis"],
     "license": "AGPL-3.0-only",
     "copyright": "© 2026 SPECTRA Contributors",
@@ -52,12 +53,8 @@
   },
   "plugins": {
     "updater": {
-      "active": true,
-      "dialog": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlDNDkyM0I1MjM0Qjk5NTMKUldSWjFBdFl1bGh0N2Z3dFpCVVZtbll1ZW5xU3F1bjdyS3hkdEJ4ZWJjQjZVNVNqRjVrMXd3TFoK",
-      "endpoints": [
-        "https://github.com/cekarna/enquetes/releases/latest/download/latest.json"
-      ]
+      "endpoints": []
     }
   },
   "app": {

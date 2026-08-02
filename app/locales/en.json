@@ -111,26 +111,23 @@
     "title": "Command palette",
     "placeholder": "Type a command or search…",
     "shortcut": "Ctrl+K",
+    "navigation": "Navigation",
     "noResults": "No results",
+    "openHint": "{{shortcut}} to open",
     "footer": "↑↓ to navigate · ↵ to validate · Esc to close"
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",
     "global": "Global",
-    "navigation": "Navigation",
-    "graph": "Graph",
     "openPalette": "Open palette",
-    "closeModal": "Close modal",
-    "focusSearch": "Focus search",
-    "newCase": "New case",
-    "save": "Save",
-    "undo": "Undo",
-    "redo": "Redo",
-    "selectAll": "Select all",
-    "deleteSelection": "Delete selection",
-    "zoomIn": "Zoom in",
-    "zoomOut": "Zoom out",
-    "fitView": "Fit view",
-    "toggleLabels": "Toggle labels"
+    "closeModal": "Close modal"
+  },
+  "settings": {
+    "language": "Language",
+    "languageHint": "Choice stored on this machine",
+    "shortcutsHint": "Shift + ? to open from anywhere",
+    "about": "About",
+    "license": "License",
+    "noTelemetry": "No telemetry · 100 % offline"
   }
 }

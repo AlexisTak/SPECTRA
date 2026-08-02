@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { AppShell, PageHeader } from "@/components/layout/shell";
+import { PageHeader } from "@/components/layout/shell";
 import {
   Panel,
   Button,
@@ -222,8 +222,9 @@ export default function AiPage() {
     { key: "rag" as const, label: "RAG" },
   ];
 
+  // La coquille applicative vient de `app/layout.tsx` : ne pas la remonter ici.
   return (
-    <AppShell>
+    <>
       <div className="space-y-6 px-8 py-5">
         {/* En-tête */}
         <PageHeader
@@ -566,6 +567,6 @@ export default function AiPage() {
           </Panel>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }

@@ -72,8 +72,15 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Décommentez les lignes suivantes après avoir généré une clé Ed25519
-          # pour la signature auto-hébergeable de l'updater Tauri :
+          # Updater auto-hébergeable — DÉSACTIVÉ tant que les trois étapes
+          # suivantes ne sont pas faites ensemble (sinon : artefacts non
+          # signés, ou `latest.json` absent et vérification en échec) :
+          #  1. `npm run tauri signer generate` puis stocker la clé privée
+          #     dans les secrets TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) et la
+          #     clé publique dans `bundle.updater.pubkey` ;
+          #  2. `bundle.createUpdaterArtifacts: true` dans tauri.conf.json ;
+          #  3. renseigner `plugins.updater.endpoints` ET appeler
+          #     `check()` côté application (aucun appel implicite en Tauri 2).
           # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:

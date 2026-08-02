@@ -111,26 +111,23 @@
     "title": "Palette de commandes",
     "placeholder": "Tapez une commande ou recherchez…",
     "shortcut": "Ctrl+K",
+    "navigation": "Navigation",
     "noResults": "Aucun résultat",
+    "openHint": "{{shortcut}} pour ouvrir",
     "footer": "↑↓ pour naviguer · ↵ pour valider · Esc pour fermer"
   },
   "shortcuts": {
     "title": "Raccourcis clavier",
     "global": "Globaux",
-    "navigation": "Navigation",
-    "graph": "Graphe",
     "openPalette": "Ouvrir la palette",
-    "closeModal": "Fermer la modale",
-    "focusSearch": "Focus recherche",
-    "newCase": "Nouveau dossier",
-    "save": "Enregistrer",
-    "undo": "Annuler",
-    "redo": "Rétablir",
-    "selectAll": "Tout sélectionner",
-    "deleteSelection": "Supprimer la sélection",
-    "zoomIn": "Zoom avant",
-    "zoomOut": "Zoom arrière",
-    "fitView": "Ajuster la vue",
-    "toggleLabels": "Afficher/masquer les labels"
+    "closeModal": "Fermer la modale"
+  },
+  "settings": {
+    "language": "Langue",
+    "languageHint": "Choix mémorisé sur cette machine",
+    "shortcutsHint": "Shift + ? pour ouvrir depuis n'importe où",
+    "about": "À propos",
+    "license": "Licence",
+    "noTelemetry": "Aucune télémétrie · 100 % hors ligne"
   }
 }
