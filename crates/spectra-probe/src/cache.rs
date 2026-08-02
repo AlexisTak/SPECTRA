@@ -17,14 +17,12 @@ struct CacheEntry {
 #[derive(Clone)]
 pub struct ProbeCache {
     data: Arc<DashMap<String, CacheEntry>>,
-    default_ttl: Duration,
 }
 
 impl ProbeCache {
     pub fn new() -> Self {
         Self {
             data: Arc::new(DashMap::new()),
-            default_ttl: Duration::from_secs(86400), // 24h
         }
     }
 

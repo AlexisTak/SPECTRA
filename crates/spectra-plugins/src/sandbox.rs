@@ -13,9 +13,13 @@ use std::collections::HashSet;
 /// Politique réseau appliquée par les host functions.
 #[derive(Debug, Clone)]
 pub struct NetworkPolicy {
+    /// Domaines autorisés, issus du manifeste du plugin.
     pub allowlist: HashSet<String>,
+    /// Nombre maximal de requêtes par exécution.
     pub max_requests_per_run: usize,
+    /// Taille maximale d'une réponse acceptée, en octets.
     pub max_response_bytes: usize,
+    /// Délai d'expiration appliqué à chaque requête, en secondes.
     pub timeout_seconds: u64,
 }
 

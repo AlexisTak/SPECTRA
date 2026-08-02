@@ -88,12 +88,16 @@ impl PluginRegistry {
 /// Erreur d'installation d'un plugin.
 #[derive(Debug, thiserror::Error)]
 pub enum PluginInstallError {
+    /// Lecture ou écriture impossible dans le registre local.
     #[error("erreur d'entrée/sortie : {0}")]
     Io(String),
+    /// Manifeste TOML absent, illisible ou incomplet.
     #[error("manifeste malformé : {0}")]
     Manifest(String),
+    /// Clé publique Ed25519 malformée.
     #[error("clé publique invalide : {0}")]
     InvalidKey(String),
+    /// Signature du module WASM non vérifiable avec la clé attendue.
     #[error("signature invalide : {0}")]
     InvalidSignature(String),
 }

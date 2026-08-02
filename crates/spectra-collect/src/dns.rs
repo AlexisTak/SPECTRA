@@ -12,6 +12,8 @@ use std::pin::Pin;
 pub struct DnsTransform;
 
 impl DnsTransform {
+    /// Crée le transform. Aucune I/O n'est réalisée à la construction.
+    #[must_use]
     pub fn new() -> Self {
         Self
     }

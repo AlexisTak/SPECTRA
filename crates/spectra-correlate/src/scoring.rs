@@ -15,21 +15,38 @@ pub struct IdentityScore {
 #[derive(Debug, Clone)]
 pub enum MatchHint {
     /// Pseudonyme identique (ou quasi-identique).
-    SameUsername { distance: f64 },
+    SameUsername {
+        /// Distance d'édition normalisée entre les deux pseudonymes.
+        distance: f64,
+    },
     /// Même avatar (pHash distance).
-    SameAvatar { phash_distance: u32 },
+    SameAvatar {
+        /// Distance de Hamming entre les deux pHash.
+        phash_distance: u32,
+    },
     /// Bio / description similaire.
-    SimilarBio { levenshtein_ratio: f64 },
+    SimilarBio {
+        /// Ratio de similarité de Levenshtein entre les deux biographies.
+        levenshtein_ratio: f64,
+    },
     /// Email partiellement masqué recoupé.
-    EmailOverlap { pattern: String },
+    EmailOverlap {
+        /// Motif masqué recoupé (par exemple `j***@e***.com`).
+        pattern: String,
+    },
     /// Fuseau horaire d'activité chevauchant.
-    OverlappingTimezone { offset_hours: i8 },
+    OverlappingTimezone {
+        /// Décalage horaire inféré, en heures par rapport à UTC.
+        offset_hours: i8,
+    },
 }
 
 /// Moteur de corrélation d'identité.
 pub struct Correlator;
 
 impl Correlator {
+    /// Crée le moteur de corrélation. Sans état, sans I/O.
+    #[must_use]
     pub fn new() -> Self {
         Self
     }

@@ -42,7 +42,7 @@ pub async fn verify_audit_trail(
     state: tauri::State<'_, AppState>,
     case_id: String,
 ) -> AppResult<AuditTrailVerification> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     // Ordonné par `sequence`, pas par `timestamp` : deux événements de la même
     // seconde sont indiscernables par l'horodatage, et l'ordre conditionne la
@@ -155,7 +155,7 @@ pub async fn list_audit(
     case_id: String,
     options: Option<ListAuditOptions>,
 ) -> AppResult<Vec<AuditEvent>> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
     let opts = options.unwrap_or_default();
 
     let mut query = String::from("SELECT id, caseId, action, entityKind, entityId, actor, metadata, imma, imma_precedent, timestamp FROM audit_events WHERE caseId = ?");
@@ -213,7 +213,7 @@ pub async fn log_access(
     state: tauri::State<'_, AppState>,
     input: LogAccessInput,
 ) -> AppResult<()> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
     let id = generate_uuid();
 

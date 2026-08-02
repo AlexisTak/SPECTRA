@@ -7,17 +7,21 @@
 //! 4. Requête : embedding de la question + recherche des k plus proches voisins.
 //! 5. Prompt augmenté avec le contexte récupéré, envoyé au LLM.
 
-use crate::backend::EmbeddingBatch;
 use crate::service::AiService;
 use serde::{Deserialize, Serialize};
 
 /// Segment de texte indexé pour le RAG.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RagChunk {
+    /// Identifiant unique du segment dans l'index.
     pub id: String,
-    pub source_type: String, // "note", "observation", "entity", etc.
+    /// Nature de la source : `note`, `observation`, `entity`, etc.
+    pub source_type: String,
+    /// Identifiant de l'élément de dossier dont provient le texte.
     pub source_id: String,
+    /// Contenu textuel du segment.
     pub text: String,
+    /// Vecteur d'embedding, absent tant que le segment n'a pas été encodé.
     pub embedding: Option<Vec<f32>>,
 }
 
@@ -28,6 +32,8 @@ pub struct RagIndex {
 }
 
 impl RagIndex {
+    /// Crée un index vide.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -85,10 +91,14 @@ impl RagIndex {
         self.chunks.clear();
     }
 
+    /// Nombre de segments indexés.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.chunks.len()
     }
 
+    /// Vrai si aucun segment n'est indexé.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.chunks.is_empty()
     }
@@ -97,16 +107,22 @@ impl RagIndex {
 /// Résultat d'une requête RAG.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RagResult {
+    /// Réponse générée par le modèle, marquée `INFERRED` par l'appelant.
     pub answer: String,
+    /// Segments effectivement fournis au modèle comme contexte.
     pub sources: Vec<RagSource>,
 }
 
 /// Source ayant contribué au contexte RAG.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RagSource {
+    /// Nature de la source : `note`, `observation`, `entity`, etc.
     pub source_type: String,
+    /// Identifiant de l'élément de dossier dont provient le texte.
     pub source_id: String,
+    /// Extrait de texte fourni au modèle.
     pub text: String,
+    /// Similarité cosinus avec la question, dans `[-1, 1]`.
     pub score: f32,
 }
 

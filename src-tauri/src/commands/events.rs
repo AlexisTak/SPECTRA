@@ -30,7 +30,7 @@ pub async fn get_events(
     state: tauri::State<'_, AppState>,
     case_id: String,
 ) -> AppResult<Vec<CaseEvent>> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, caseId, type, titre, description, timestamp, actor, metadata FROM case_events WHERE caseId = ? ORDER BY timestamp DESC")?;
 
@@ -61,7 +61,7 @@ pub async fn add_note(
     case_id: String,
     description: String,
 ) -> AppResult<CaseEvent> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
     let id = generate_uuid();
 

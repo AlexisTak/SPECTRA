@@ -3,7 +3,6 @@
 use extism::{
     Manifest as ExtismManifest, PluginBuilder, UserData, ValType, Wasm,
 };
-use spectra_core::EntityKind;
 use spectra_transform::{
     Transform, TransformContext, TransformError, TransformInput, TransformOutput,
 };

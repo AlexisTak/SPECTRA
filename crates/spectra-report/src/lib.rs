@@ -57,9 +57,13 @@ pub struct ReportOptions {
 /// Format de sortie du rapport.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ReportFormat {
+    /// Markdown brut, réimportable et diffable.
     Markdown,
+    /// HTML autonome, consultable hors ligne.
     Html,
+    /// PDF paginé, destiné à la remise.
     Pdf,
+    /// DOCX, pour relecture et annotation.
     Docx,
 }
 
@@ -150,8 +154,8 @@ impl ReportEngine {
                         .trim_matches('"')
                         .to_string();
                     let line = format!(
-                        "  • {} = {} (source: {}, confiance: {:?})",
-                        o.predicate, val, o.source, o.confidence
+                        "  • {} = {} (source: {}, confiance: {:?}, provenance: {})",
+                        o.predicate, val, o.source, o.confidence, provenance_label
                     );
                     let color = match o.provenance {
                         Provenance::Inferred => printpdf::Color::Rgb(printpdf::Rgb::new(

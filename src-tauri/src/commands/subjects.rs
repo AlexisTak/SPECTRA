@@ -68,7 +68,7 @@ pub async fn get_subjects(
     state: tauri::State<'_, AppState>,
     case_id: String,
 ) -> AppResult<Vec<Subject>> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, caseId, nom, prenom, statut, dateNaissance, lieuNaissance, nationalite, telephone, email, adresse, description, metadata FROM subjects WHERE caseId = ? ORDER BY nom")?;
 

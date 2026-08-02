@@ -6,10 +6,15 @@ use std::collections::BTreeMap;
 /// Une relation orientée entre deux entités.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct StoredRelation {
+    /// Identifiant en base, absent tant que la relation n'est pas insérée.
     pub id: Option<i64>,
+    /// Identifiant de l'entité d'origine.
     pub source: String,
+    /// Identifiant de l'entité cible.
     pub target: String,
+    /// Nature du lien (`owns`, `mentions`, `resolves_to`…).
     pub kind: String,
+    /// Propriétés libres attachées au lien.
     pub properties: BTreeMap<String, serde_json::Value>,
 }
 

@@ -18,8 +18,6 @@ struct WmnSite {
     name: String,
     uri_check: String,
     #[serde(default)]
-    uri: Option<String>,
-    #[serde(default)]
     category: Option<String>,
     #[serde(default)]
     e_code: Option<u16>,
@@ -27,12 +25,6 @@ struct WmnSite {
     e_string: Option<String>,
     #[serde(default)]
     m_string: Option<String>,
-    #[serde(default)]
-    regex_check: Option<String>,
-    #[serde(default)]
-    url: Option<String>,
-    #[serde(default)]
-    known: Option<Vec<String>>,
 }
 
 pub fn convert(content: &str, source_hash: &str) -> Result<(Vec<Probe>, ConversionReport), Box<dyn std::error::Error>> {

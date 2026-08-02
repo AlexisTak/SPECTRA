@@ -139,7 +139,7 @@ fn search_fts_table(
 
 #[command]
 pub async fn reindex_all(state: tauri::State<'_, AppState>) -> AppResult<()> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     // Rebuild FTS indexes
     conn.execute("INSERT INTO fts_cases(fts_cases) VALUES('rebuild')", rusqlite::params!())?;

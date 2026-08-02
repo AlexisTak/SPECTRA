@@ -12,6 +12,8 @@ use std::pin::Pin;
 pub struct CtTransform;
 
 impl CtTransform {
+    /// Crée le transform. Aucune I/O n'est réalisée à la construction.
+    #[must_use]
     pub fn new() -> Self {
         Self
     }
@@ -24,10 +26,6 @@ struct CrtShEntry {
     issuer: Option<String>,
     #[serde(rename = "common_name")]
     common_name: Option<String>,
-    #[serde(rename = "name_value")]
-    name_value: Option<String>,
-    #[serde(rename = "entry_timestamp")]
-    entry_timestamp: Option<String>,
 }
 
 impl Transform for CtTransform {

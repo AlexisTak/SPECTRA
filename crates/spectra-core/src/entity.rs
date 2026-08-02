@@ -129,22 +129,39 @@ impl AdmiraltyCode {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum EntityKind {
+    /// Personne physique.
     Person,
+    /// Autre nom connu d'une personne ou d'une organisation.
     Alias,
+    /// Adresse e-mail.
     EmailAddress,
+    /// Numéro de téléphone (normalisé en E.164).
     PhoneNumber,
+    /// Pseudonyme utilisé sur une ou plusieurs plateformes.
     Username,
+    /// Compte identifié sur une plateforme donnée.
     SocialProfile,
+    /// Nom de domaine.
     Domain,
+    /// Adresse IP (v4 ou v6).
     IpAddress,
+    /// Plage d'adresses IP.
     Netblock,
+    /// Personne morale.
     Organization,
+    /// Lieu, éventuellement porteur de coordonnées.
     Location,
+    /// Pièce jointe documentaire.
     Document,
+    /// Image (avatar, capture, pièce visuelle).
     Image,
+    /// Adresse de portefeuille crypto.
     CryptoAddress,
+    /// Appareil identifié (empreinte, IMEI, identifiant matériel).
     Device,
+    /// Événement daté.
     Event,
+    /// Véhicule (plaque, identifiant).
     Vehicle,
 }
 
@@ -152,11 +169,17 @@ pub enum EntityKind {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum PropertyValue {
+    /// Chaîne de caractères.
     String(String),
+    /// Entier signé.
     Integer(i64),
+    /// Nombre à virgule flottante.
     Float(f64),
+    /// Booléen.
     Boolean(bool),
+    /// Horodatage sérialisé en RFC 3339.
     DateTime(String),
+    /// Valeur JSON arbitraire, pour les structures non modélisées.
     Json(serde_json::Value),
 }
 
@@ -167,7 +190,9 @@ pub enum PropertyValue {
 /// l'affichage, mais la source de vérité est le flux d'observations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entity {
+    /// Identifiant unique et stable de l'entité.
     pub id: EntityId,
+    /// Type d'entité, tel que défini par l'ontologie.
     pub kind: EntityKind,
     /// Valeur normalisée (email en minuscules, téléphone en E.164, etc.).
     pub canonical_value: String,
@@ -175,6 +200,7 @@ pub struct Entity {
     pub display_label: String,
     /// Propriétés dérivées pour l'affichage. La vérité est dans les observations.
     pub properties: BTreeMap<String, PropertyValue>,
+    /// Date de création de l'entité dans le dossier (RFC 3339).
     pub created_at: String,
     /// Les fusions sont réversibles : on conserve la trace des entités absorbées.
     pub merged_from: Vec<EntityId>,
@@ -187,10 +213,13 @@ pub struct Entity {
 /// raisonnement.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Observation {
+    /// Identifiant unique de l'observation.
     pub id: ObservationId,
+    /// Entité à laquelle l'observation se rapporte.
     pub subject: EntityId,
     /// Prédicat : `"email"`, `"pseudo"`, `"avatar_url"`, `"bio"`, etc.
     pub predicate: String,
+    /// Valeur observée pour ce prédicat.
     pub value: PropertyValue,
     /// Source : nom du transform, identifiant de plugin, ou analyste.
     pub source: String,
@@ -204,6 +233,7 @@ pub struct Observation {
     pub valid_to: Option<String>,
     /// Niveau de confiance (échelle Admiralty).
     pub confidence: AdmiraltyCode,
+    /// Origine de la donnée : collectée, affirmée par l'analyste, ou inférée.
     pub provenance: Provenance,
     /// Hash du contenu brut archivé (optionnel).
     pub raw_hash: Option<String>,

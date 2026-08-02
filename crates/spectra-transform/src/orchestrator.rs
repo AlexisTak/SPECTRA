@@ -6,7 +6,7 @@
 //! - annulation propre via `CancellationToken`.
 
 use crate::cache::{CacheKey, ResponseCache};
-use crate::transform::{BoxedTransform, Transform, TransformContext, TransformError, TransformInput, TransformOutput};
+use crate::transform::{Transform, TransformContext, TransformError, TransformInput, TransformOutput};
 use governor::{clock::DefaultClock, state::keyed::DefaultKeyedStateStore, Quota, RateLimiter};
 use std::collections::{HashMap, HashSet};
 use std::num::NonZeroU32;
@@ -30,7 +30,9 @@ struct PlanNode {
 /// Résultat d'un nœud du plan.
 #[derive(Debug, Clone)]
 pub struct NodeResult {
+    /// Identifiant du transform exécuté pour ce nœud.
     pub transform_id: String,
+    /// Sortie du transform, ou l'erreur rencontrée.
     pub output: Result<TransformOutput, TransformError>,
     /// Temps d'exécution en millisecondes.
     pub elapsed_ms: u64,
@@ -264,7 +266,7 @@ fn hash_params(params: &std::collections::BTreeMap<String, serde_json::Value>) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use spectra_core::{Entity, EntityId, EntityKind};
+    use spectra_core::{Entity, EntityKind};
 
     struct DummyTransform {
         id: String,

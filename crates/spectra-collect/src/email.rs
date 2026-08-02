@@ -22,6 +22,11 @@ pub struct EmailTransform {
 }
 
 impl EmailTransform {
+    /// Construit le transform et son résolveur DNS.
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le résolveur système ne peut pas être construit.
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let resolver = TokioResolver::builder_tokio()
             .map_err(|e| format!("resolver builder: {e}"))?
@@ -84,7 +89,10 @@ impl EmailTransform {
     }
 
     /// Génère des permutations courantes d'emails à partir d'un nom/prénom.
-    fn generate_permutations(
+    ///
+    /// `domain` doit inclure l'arobase (par exemple `@example.com`).
+    #[must_use]
+    pub fn generate_permutations(
         first: &str,
         last: &str,
         domain: &str,

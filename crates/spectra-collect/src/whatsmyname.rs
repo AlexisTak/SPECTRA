@@ -35,24 +35,34 @@ use tracing::debug;
 /// Dataset WhatsMyName complet.
 #[derive(Debug, Clone, Deserialize)]
 pub struct WhatsMyNameData {
+    /// Liste des sites décrits par le dataset.
     pub sites: Vec<Site>,
 }
 
 /// Description d'un site dans le dataset.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Site {
+    /// Nom lisible du site.
     pub name: String,
+    /// Gabarit d'URL de vérification, où `{account}` est substitué.
     pub uri_check: String,
+    /// Code HTTP attendu quand le compte existe.
     #[serde(rename = "e_code")]
     pub exists_code: Option<u16>,
+    /// Fragment devant être présent dans le corps quand le compte existe.
     #[serde(rename = "e_string")]
     pub exists_string: Option<String>,
+    /// Code HTTP attendu quand le compte n'existe pas.
     #[serde(rename = "m_code")]
     pub missing_code: Option<u16>,
+    /// Fragment devant être présent dans le corps quand le compte n'existe pas.
     #[serde(rename = "m_string")]
     pub missing_string: Option<String>,
+    /// Comptes publics connus, utilisés pour valider la sonde.
     pub known: Option<Vec<String>>,
+    /// Catégorie du site (réseau social, forum, jeu…).
     pub cat: String,
+    /// Protections anti-bot déclarées (Cloudflare, captcha…).
     pub protection: Option<Vec<String>>,
 }
 
@@ -61,9 +71,13 @@ pub struct Site {
 pub enum SiteResult {
     /// Le profil existe selon les critères.
     Exists {
+        /// Nom du site.
         site: String,
+        /// URL du profil trouvé.
         url: String,
+        /// Pseudonyme recherché.
         username: String,
+        /// Catégorie du site.
         category: String,
     },
     /// Le profil n'existe pas.
@@ -90,6 +104,13 @@ impl WhatsMyNameEngine {
         Ok(Self::new(data.sites))
     }
 
+    /// Construit le moteur à partir d'une liste de sites fournie par l'appelant.
+    ///
+    /// # Panics
+    ///
+    /// Panique si le client HTTP ne peut pas être construit, ce qui traduirait
+    /// une configuration TLS invalide de la plateforme.
+    #[must_use]
     pub fn new(sites: Vec<Site>) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(15))
@@ -206,6 +227,11 @@ pub struct WhatsMyNameTransform {
 }
 
 impl WhatsMyNameTransform {
+    /// Construit le transform à partir du dataset embarqué.
+    ///
+    /// # Errors
+    ///
+    /// Retourne une erreur si le dataset embarqué est illisible.
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
             engine: WhatsMyNameEngine::from_embedded()?,

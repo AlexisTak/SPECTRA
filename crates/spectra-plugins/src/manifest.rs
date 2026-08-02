@@ -17,35 +17,51 @@ pub struct PluginManifest {
     pub expected_public_key: Option<String>,
 }
 
+/// Métadonnées d'identification du plugin.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Meta {
+    /// Identifiant unique du plugin (utilisé comme nom de dossier).
     pub id: String,
+    /// Nom lisible affiché dans l'UI.
     pub name: String,
+    /// Version sémantique du plugin.
     pub version: String,
+    /// Auteur ou organisation responsable.
     pub author: String,
+    /// Licence du plugin, vérifiée à l'installation.
     pub license: String,
 }
 
 /// Spécification d'un transform exposé par le plugin.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransformSpec {
+    /// Identifiant du transform, unique au sein du plugin.
     pub id: String,
+    /// Nom lisible affiché dans le menu d'expansion.
     pub name: String,
+    /// Description de ce que le transform collecte.
     pub description: String,
+    /// Types d'entités acceptés en entrée.
     pub input_kinds: Vec<EntityKind>,
+    /// Types d'entités susceptibles d'être produits.
     pub output_kinds: Vec<EntityKind>,
 }
 
 /// Permissions demandées par le plugin.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Permissions {
+    /// Permissions réseau, seul canal de sortie offert au plugin.
     pub network: NetworkPermissions,
 }
 
+/// Permissions réseau déclarées au manifeste et imposées par l'hôte.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkPermissions {
+    /// Domaines joignables. Tout autre domaine est refusé par l'hôte.
     pub allowlist: HashSet<String>,
+    /// Nombre maximal de requêtes autorisées par exécution.
     pub max_requests_per_run: usize,
+    /// Taille maximale d'une réponse acceptée, en octets.
     pub max_response_bytes: usize,
 }
 

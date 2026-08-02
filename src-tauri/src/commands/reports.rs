@@ -86,7 +86,7 @@ pub async fn get_reports(
     state: tauri::State<'_, AppState>,
     case_id: Option<String>,
 ) -> AppResult<Vec<Report>> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     let query = if let Some(ref _cid) = case_id {
         "SELECT id, reference, caseId, titre, description, statut, dateCreation, dateEcheance, dateCloture, auteur, metadata FROM reports WHERE caseId = ? ORDER BY dateCreation DESC"
@@ -130,7 +130,7 @@ pub async fn get_report(
     state: tauri::State<'_, AppState>,
     id: String,
 ) -> AppResult<Option<Report>> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, reference, caseId, titre, description, statut, dateCreation, dateEcheance, dateCloture, auteur, metadata FROM reports WHERE id = ?")?;
 
@@ -254,7 +254,7 @@ pub async fn update_report(
     id: String,
     data: UpdateReportInput,
 ) -> AppResult<Report> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     // Bloc explicite : `Vec<&dyn ToSql>` n'est pas `Sync` et ne doit pas rester
     // vivant au moment du `.await` final (le futur de la commande doit être
@@ -366,7 +366,7 @@ pub async fn delete_report(
     state: tauri::State<'_, AppState>,
     id: String,
 ) -> AppResult<()> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     // Remove from FTS index
     conn.execute(
@@ -445,7 +445,7 @@ pub async fn delete_report(
 
 #[command]
 pub async fn get_report_stats(state: tauri::State<'_, AppState>) -> AppResult<ReportStats> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     let total: i64 = conn.query_row(
         "SELECT COUNT(*) FROM reports",
@@ -484,7 +484,7 @@ pub async fn add_report_content(
     contenu: String,
     ordre: Option<i32>,
 ) -> AppResult<ReportContent> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
     let id = generate_uuid();
 
@@ -544,7 +544,7 @@ pub async fn get_report_contents(
     state: tauri::State<'_, AppState>,
     report_id: String,
 ) -> AppResult<Vec<ReportContent>> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, reportId, section, contenu, ordre, metadata FROM report_contents WHERE reportId = ? ORDER BY ordre")?;
 
@@ -574,7 +574,7 @@ pub async fn add_report_timeline_event(
     date_event: String,
     description: String,
 ) -> AppResult<ReportTimelineEvent> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
     let now = Utc::now().to_rfc3339();
     let id = generate_uuid();
 

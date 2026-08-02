@@ -1,6 +1,6 @@
 //! Transform WHOIS — requête vers les serveurs de registre.
 
-use spectra_core::{Entity, EntityKind, Observation, PropertyValue};
+use spectra_core::{EntityKind, Observation, PropertyValue};
 use spectra_transform::{
     Transform, TransformContext, TransformError, TransformInput, TransformOutput,
 };
@@ -13,6 +13,8 @@ use tokio::net::TcpStream;
 pub struct WhoisTransform;
 
 impl WhoisTransform {
+    /// Crée le transform. Aucune I/O n'est réalisée à la construction.
+    #[must_use]
     pub fn new() -> Self {
         Self
     }

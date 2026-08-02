@@ -194,7 +194,7 @@ pub async fn list_claims(
     state: tauri::State<'_, AppState>,
     case_id: String,
 ) -> AppResult<Vec<Claim>> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, caseId, refKind, refId, qualification, fiabilite, source, sourceUrl, takenBy, notes, datePreuve, metadata FROM claims WHERE caseId = ? ORDER BY fiabilite DESC")?;
 
@@ -246,7 +246,7 @@ pub async fn delete_claim(
     id: String,
     case_id: String,
 ) -> AppResult<()> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     // Récupère le dernier hash d'audit pour ce dossier (chaînage).
     let previous_hash: Option<String> = conn
@@ -319,7 +319,7 @@ pub async fn get_claim_stats(
     state: tauri::State<'_, AppState>,
     case_id: String,
 ) -> AppResult<ClaimStats> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     let total: i64 = conn.query_row(
         "SELECT COUNT(*) FROM claims WHERE caseId = ?",

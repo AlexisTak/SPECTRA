@@ -31,7 +31,9 @@ pub struct TransformOutput {
 /// Une relation orientée entre deux entités.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Relation {
+    /// Entité d'origine du lien.
     pub source: EntityId,
+    /// Entité cible du lien.
     pub target: EntityId,
     /// Type sémantique de la relation : `"resolved_to"`, `"hosted_on"`,
     /// `"registered_by"`, etc.

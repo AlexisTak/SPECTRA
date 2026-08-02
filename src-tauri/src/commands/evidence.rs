@@ -36,7 +36,7 @@ pub async fn get_evidence(
     state: tauri::State<'_, AppState>,
     case_id: String,
 ) -> AppResult<Vec<Evidence>> {
-    let mut conn = state.get_conn().await;
+    let conn = state.get_conn().await;
 
     let mut stmt = conn.prepare("SELECT id, caseId, type, nom, description, chemin, hash_sha256, hash_md5, taille, dateAjout, statut, source, sourceUrl, metadata FROM evidence WHERE caseId = ? ORDER BY dateAjout DESC")?;
 

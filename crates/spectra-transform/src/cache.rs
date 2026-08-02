@@ -6,23 +6,30 @@
 
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::time::{Duration, Instant};
 
 /// Clé de cache : identifie de manière unique un appel à transform.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct CacheKey {
+    /// Identifiant du transform appelé.
     pub transform_id: String,
+    /// Type de l'entité d'entrée.
     pub entity_kind: String,
+    /// Valeur canonique de l'entité d'entrée.
     pub canonical_value: String,
+    /// Empreinte des paramètres d'appel, pour distinguer deux exécutions.
     pub params_hash: String,
 }
 
 /// Entrée de cache avec TTL.
 #[derive(Debug, Clone)]
 pub struct CacheEntry {
+    /// Sortie du transform sérialisée en JSON.
     pub output_json: String,
+    /// Instant de mise en cache.
     pub cached_at: Instant,
+    /// Durée de validité de l'entrée.
     pub ttl: Duration,
 }
 

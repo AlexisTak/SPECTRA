@@ -13,11 +13,17 @@ use std::collections::BTreeSet;
 /// Fragment exportable d'un dossier.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Fragment {
+    /// Version du format de fragment, pour la compatibilité ascendante.
     pub version: u32,
+    /// Date d'export (RFC 3339).
     pub exported_at: String,
+    /// Analyste ayant produit le fragment.
     pub exported_by: String,
+    /// Entités incluses dans le fragment.
     pub entities: Vec<Entity>,
+    /// Observations rattachées aux entités incluses.
     pub observations: Vec<Observation>,
+    /// Relations dont la source ou la cible fait partie du fragment.
     pub relations: Vec<StoredRelation>,
 }
 
@@ -105,7 +111,6 @@ impl Store {
                         new_mf.insert(m.clone());
                     }
                     let newer = e.created_at > existing.created_at;
-                    let props_changed = e.properties != existing.properties;
 
                     if !newer && !mf_grew {
                         // Aucun changement apporté par le fragment
@@ -163,12 +168,20 @@ impl Store {
 /// Compte-rendu d'un import.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct ImportSummary {
+    /// Entités absentes du dossier et créées à l'import.
     pub entities_inserted: usize,
+    /// Entités laissées inchangées, le fragment n'apportant rien de plus récent.
     pub entities_skipped: usize,
+    /// Entités existantes mises à jour par fusion CRDT.
     pub entities_merged: usize,
+    /// Observations créées.
     pub observations_inserted: usize,
+    /// Observations ignorées car déjà connues et plus récentes.
     pub observations_skipped: usize,
+    /// Observations remplacées par une version plus récente.
     pub observations_updated: usize,
+    /// Relations créées.
     pub relations_inserted: usize,
+    /// Relations déjà présentes, ignorées.
     pub relations_skipped: usize,
 }
